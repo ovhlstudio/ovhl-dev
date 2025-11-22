@@ -1,0 +1,36 @@
+{
+	"name": "OVHL_Framework",
+	"tree": {
+		"$className": "DataModel",
+		"ReplicatedStorage": {
+			"$className": "ReplicatedStorage",
+			"$ignoreUnknownInstances": true,
+			"Packages": { "$path": "Packages" },
+			"OVHL": { "$path": "src/ReplicatedStorage/OVHL" }
+		},
+		"ServerScriptService": {
+			"$className": "ServerScriptService",
+			"$ignoreUnknownInstances": true,
+			"OVHL": { "$path": "src/ServerScriptService/OVHL" }
+		},
+		"StarterPlayer": {
+			"$className": "StarterPlayer",
+			"$ignoreUnknownInstances": true,
+			"StarterPlayerScripts": {
+				"$className": "StarterPlayerScripts",
+				"$ignoreUnknownInstances": true,
+				"OVHL": {
+					"$path": "src/StarterPlayer/StarterPlayerScripts/OVHL"
+				}
+			}
+		},
+		"Workspace": {
+			"$className": "Workspace",
+			"$ignoreUnknownInstances": true
+		},
+		"Lighting": {
+			"$className": "Lighting",
+			"$ignoreUnknownInstances": true
+		}
+	}
+}

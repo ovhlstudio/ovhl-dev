@@ -1,0 +1,10 @@
+# Project place file
+/ovhl-framework.rbxlx
+/Packages
+/lokal
+
+# Roblox Studio lock files
+/*.rbxlx.lock
+/*.rbxl.lock
+
+sourcemap.json

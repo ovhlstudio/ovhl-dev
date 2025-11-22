@@ -1,0 +1,54 @@
+{
+	"folders": [
+		{
+			"name": "🤖 OMNIVERSE ROOT",
+			"path": "."
+		},
+		{
+			"name": "🎮 Framework (Lua)",
+			"path": "ovhl-framework"
+		},
+		{
+			"name": "🛠️ Tools (SDK)",
+			"path": "ovhl-tools"
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"**/.git": true,
+			"**/.DS_Store": true,
+			"**/*.rbxmx": true
+		},
+		
+		// --- AUTO FORMAT MAGIC ---
+		"editor.formatOnSave": true, 
+		
+		// 1. Setting Prettier (Buat file umum: JSON, Markdown, dll)
+		"editor.defaultFormatter": "esbenp.prettier-vscode",
+		"prettier.tabWidth": 4,
+		"prettier.useTabs": true,
+
+		// 2. Setting StyLua (Khusus Script Roblox/Luau)
+		"[luau]": {
+			"editor.defaultFormatter": "JohnnyMorganz.stylua"
+		},
+		"[lua]": {
+			"editor.defaultFormatter": "JohnnyMorganz.stylua"
+		},
+
+		// Kosmetik (Biar keliatan kalau lagi di Monorepo)
+		"workbench.colorCustomizations": {
+			"titleBar.activeBackground": "#0f0f14",
+			"titleBar.activeForeground": "#00ffcc" 
+		}
+	},
+	"extensions": {
+		"recommendations": [
+			"nightcycles.roblox-lsp",
+			"evaera.vscode-rojo",
+			"tamasfe.even-better-toml",
+			"JohnnyMorganz.stylua",
+			"esbenp.prettier-vscode"
+		]
+	}
+}
