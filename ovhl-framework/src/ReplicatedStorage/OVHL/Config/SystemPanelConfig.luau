@@ -15,7 +15,7 @@ return {
 		Text = "PANEL",
 		Icon = "rbxassetid://6022668961", -- Settings Icon
 		Order = 99,
-		Permission = 3, -- Minimal Admin (3) untuk melihat tombol ini
+		Permission = 5, -- Minimal Admin (3) untuk melihat tombol ini
 		Shortcut = Enum.KeyCode.F4,
 	},
 
