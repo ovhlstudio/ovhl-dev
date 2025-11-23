@@ -1,13 +1,59 @@
-# Project place file
-/ovhl-framework.rbxlx
-/Packages
-/lokal
-.run.sh
-.run.luau
+# ========================
+# 🧱 ROBLOX & ROJO ARTIFACTS
+# ========================
+# Abaikan hasil build place (Binary & XML)
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
 
-# Roblox Studio lock files
-/*.rbxlx.lock
-/*.rbxl.lock
+# Kecuali kalau lu punya base map khusus yang mau di-track (Uncomment jika perlu)
+# !src/Baseplate.rbxl
 
-sourcemap.json
+# ========================
+# 📦 DEPENDENCIES (WALLY)
+# ========================
+# Kita track wally.toml & wally.lock, tapi abaiikan isi packages-nya
+Packages/
+_Index/
+node_modules/
 
+# ========================
+# 🕵️ OVHL AUDIT TOOL V3 (JANGAN COMMIT LAPORAN!)
+# ========================
+# Abaikan semua folder output laporan (biar repo gak bengkak)
+/run.luau
+/run.sh
+run.luau
+run.sh
+
+# Abaikan file snapshot individual yang mungkin kesasar di root
+ovhl-snapshot-*.md
+audit-v3-*.md
+project-snapshot-*.md
+
+# ========================
+# 🔧 IDE & SYSTEM CONFIG
+# ========================
+.DS_Store
+thumbs.db
+*.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ========================
+# 🗑️ TEMPORARY & LOGS
+# ========================
+*.tmp
+*.log
+*.bak
+*_temp.lua
+*_temp.luau
+
+# ========================
+# 🧪 TEST RESULTS (TestEZ)
+# ========================
+# Abaikan hasil output XML/JSON dari TestEZ kalau ada
+test_results.xml
+coverage.out
