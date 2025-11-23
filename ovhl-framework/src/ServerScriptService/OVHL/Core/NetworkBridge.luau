@@ -1,5 +1,5 @@
 --!strict
--- @Component: NetworkBridge (Server v2.1 - Luau Edition)
+-- @Component: NetworkBridge (Server v2.2 - PATCHED)
 -- @Role: Traffic Controller & Security Checkpoint
 local RS = game:GetService('ReplicatedStorage')
 local SS = game:GetService('ServerScriptService')
@@ -20,12 +20,12 @@ function Bridge.New(ctx)
         _logger = netLog,
         _secLog = secLog,
         _limit = ctx.RateLimiter,
-        _root = nil
+        _root = nil,
+        _services = {} -- Initialize here to be safe
     }, Bridge)
     
     self._root = RS:FindFirstChild('OVHL_Remotes') or Instance.new('Folder', RS)
     self._root.Name = 'OVHL_Remotes'
-    self._services = {}
     
     -- [CCTV] Verification Log
     self._secLog:Info("System", "🛡️ Security Systems (Guard & Limiter) Connected")
@@ -57,7 +57,12 @@ function Bridge:Register(serviceName, netConfig)
         re.Name = remoteName
     end
     
-    return { OnInvoke = function() end, Fire = function(...) end }
+    -- Return handle for local context usage if needed
+    return { 
+        OnInvoke = function() end, 
+        Fire = function(plr, evt, ...) self:Fire(plr, serviceName, evt, ...) end,
+        FireAll = function(evt, ...) self:FireAll(serviceName, evt, ...) end
+    }
 end
 
 function Bridge:_handleInvoke(player, serviceName, methodName, rules, ...)
@@ -83,7 +88,10 @@ function Bridge:_handleInvoke(player, serviceName, methodName, rules, ...)
     local service = self._services[serviceName]
     if service and service[methodName] then
         local success, result = pcall(service[methodName], service, player, table.unpack(cleanArgs))
-        if not success then return { Success=false, Error='Internal Server Error' } end
+        if not success then 
+            self._logger:Error("ExecError", {Srv=serviceName, Mtd=methodName, Err=result})
+            return { Success=false, Error='Internal Server Error' } 
+        end
         
         -- E. Outbound Guard
         local sanitized = Guard.SanitizeOutbound(result)
@@ -95,4 +103,26 @@ function Bridge:_handleInvoke(player, serviceName, methodName, rules, ...)
 end
 
 function Bridge:Bind(name, srv) self._services[name] = srv end
+
+-- [PATCH] MISSING METHODS RESTORED
+function Bridge:Fire(player, serviceName, eventName, ...)
+    local remoteName = serviceName .. '/' .. eventName
+    local re = self._root:FindFirstChild(remoteName)
+    if re and re:IsA("RemoteEvent") then
+        re:FireClient(player, ...)
+    else
+        warn("[Bridge] Fire Failed: RemoteEvent '"..remoteName.."' not found")
+    end
+end
+
+function Bridge:FireAll(serviceName, eventName, ...)
+    local remoteName = serviceName .. '/' .. eventName
+    local re = self._root:FindFirstChild(remoteName)
+    if re and re:IsA("RemoteEvent") then
+        re:FireAllClients(...)
+    else
+        warn("[Bridge] FireAll Failed: RemoteEvent '"..remoteName.."' not found")
+    end
+end
+
 return Bridge

@@ -11,24 +11,44 @@
 		{
 			"name": "🛠️ Tools (SDK)",
 			"path": "ovhl-tools"
+		},
+		{
+			"name": "🔍 Bash Audit Tools",
+			"path": "audit-tools"
 		}
 	],
 	"settings": {
+		// --- 1. CLEANLINESS (Biar mata gak sakit) ---
 		"files.exclude": {
 			"**/.git": true,
 			"**/.DS_Store": true,
-			"**/*.rbxmx": true
+			"**/*.rbxmx": true,
+			"**/*.rbxl": true,
+			"**/Thumbs.db": true
 		},
-		
-		// --- AUTO FORMAT MAGIC ---
-		"editor.formatOnSave": true, 
-		
-		// 1. Setting Prettier (Buat file umum: JSON, Markdown, dll)
+		// Hide Wally Packages dari Search (PENTING! Biar Ctrl+F gak nemu file library orang)
+		"search.exclude": {
+			"**/Packages": true,
+			"**/DevPackages": true,
+			"**/_Index": true,
+			"**/node_modules": true
+		},
+		// Hemat RAM & CPU (Jangan watch folder sampah)
+		"files.watcherExclude": {
+			"**/Packages/**": true,
+			"**/_Index/**": true,
+			"**/.git/objects/**": true
+		},
+
+		// --- 2. AUTO FORMAT MAGIC ---
+		"editor.formatOnSave": true,
+
+		// General
 		"editor.defaultFormatter": "esbenp.prettier-vscode",
 		"prettier.tabWidth": 4,
 		"prettier.useTabs": true,
 
-		// 2. Setting StyLua (Khusus Script Roblox/Luau)
+		// Lua / Roblox (StyLua)
 		"[luau]": {
 			"editor.defaultFormatter": "JohnnyMorganz.stylua"
 		},
@@ -36,19 +56,48 @@
 			"editor.defaultFormatter": "JohnnyMorganz.stylua"
 		},
 
-		// Kosmetik (Biar keliatan kalau lagi di Monorepo)
+		// Bash Script (Biar Audit Tools lu rapi otomatis!)
+		"[shellscript]": {
+			"editor.defaultFormatter": "foxundermoon.shell-format",
+			"editor.tabSize": 2
+		},
+
+		// --- 3. TERMINAL & SHELL ---
+		// Biar integrated terminal langsung support Git Bash/WSL kalau ada
+		"terminal.integrated.defaultProfile.windows": "Git Bash",
+
+		// --- 4. KOSMETIK PRO ---
 		"workbench.colorCustomizations": {
+			// Header lebih garang & futuristic
 			"titleBar.activeBackground": "#0f0f14",
-			"titleBar.activeForeground": "#00ffcc" 
+			"titleBar.activeForeground": "#00ffcc",
+			"titleBar.inactiveBackground": "#08080a",
+
+			// List Tree biar folder ROOT lebih standout
+			"list.activeSelectionBackground": "#00ffcc33",
+			"list.activeSelectionForeground": "#00ffcc",
+
+			// StatusBar beda warna biar tau ini Workspace Omniverse
+			"statusBar.background": "#1a1a20",
+			"statusBar.foreground": "#ffffff"
 		}
 	},
 	"extensions": {
 		"recommendations": [
+			// Roblox Core
 			"nightcycles.roblox-lsp",
 			"evaera.vscode-rojo",
-			"tamasfe.even-better-toml",
 			"JohnnyMorganz.stylua",
-			"esbenp.prettier-vscode"
+			"kampfkarren.selene-vscode", // WAJIB: Lu punya selene.toml soalnya!
+
+			// Utilities
+			"tamasfe.even-better-toml",
+			"esbenp.prettier-vscode",
+			"usernamehw.errorlens", // Biar error langsung muncul di baris code (Enak bgt)
+
+			// Bash / Shell (Support Audit Tools lu)
+			"timonwong.shellcheck", // Linter buat script bash (Ngasih tau kalo ada logic error)
+			"foxundermoon.shell-format" // Formatter buat bash
 		]
 	}
 }

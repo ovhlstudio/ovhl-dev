@@ -1,18 +1,21 @@
 --!strict
--- @Controller: InventoryController
-local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
-local Fusion = Loader.Pkg("Fusion")
-local Trove = Loader.Pkg("Trove")
-local Bridge = Loader.Core.Networking.Bridge.New()
-local SharedConfig = Loader.Module("Inventory").SharedConfig
+-- @Controller: InventoryController (V2 Standard)
+local RS = game:GetService("ReplicatedStorage")
+local Loader = require(RS.OVHL.Core.Loader)
+local OVHL = require(RS.OVHL.Core.Framework)
+
 local UI = Loader.UI.Foundation.API
+local Fusion = UI.Fusion
+local Trove = Loader.Pkg("Trove")
 local Topbar = Loader.UI.Foundation.Bridges.Topbar
 local InventoryView = Loader.UI.Views.Inventory.InventoryView
 
-local Ctrl = {}
+local Ctrl = OVHL.CreateController({
+    Name = "Inventory",
+    ConfigName = "Inventory" -- Auto-load Config
+})
 
-function Ctrl:Init(ctx)
-    self.Logger = ctx:CreateLogger("INVENTORY")
+function Ctrl:Init()
     self._trove = Trove.new()
     self.Scope = UI.NewScope()
     
@@ -22,18 +25,14 @@ function Ctrl:Init(ctx)
     }
     
     local mounted = UI.SafeLoader.Mount(self.Scope, InventoryView, {
-        Config = SharedConfig,
+        Config = self.Config,
         State = self.State,
         OnClose = function() self:Toggle(false) end,
-        
-        -- [HANDLER]
-        OnAction = function(item, actionId, unlockUI)
-            self:HandleAction(item, actionId, unlockUI)
-        end
+        OnAction = function(item, actionId, unlockUI) self:HandleAction(item, actionId, unlockUI) end
     })
     if mounted then self._trove:Add(mounted) end
 
-    self.Icon = Topbar.Register("Inventory", SharedConfig.Topbar, function(isOpened)
+    self.Icon = Topbar.Register("Inventory", self.Config.Topbar, function(isOpened)
         self:Toggle(isOpened)
     end)
 end
@@ -42,24 +41,41 @@ function Ctrl:Start()
     self:FetchData()
 end
 
+-- [CRITICAL FIX] Memory Cleanup
+-- Metode ini dipersiapkan untuk dipanggil oleh Framework saat Controller di-unload
+-- atau saat Player Reset/Keluar (tergantung implementasi Framework Kernel kedepannya)
+function Ctrl:Shutdown()
+    if self._trove then
+        self._trove:Destroy()
+        self._trove = nil
+    end
+    -- Scope Fusion juga perlu dibersihkan jika Framework support hot-reload
+    if self.Scope and self.Scope.doCleanup then
+        self.Scope:doCleanup()
+        self.Scope = nil
+    end
+end
+
 function Ctrl:HandleAction(item, actionId, unlockUI)
-    -- [SMART] Call PerformAction endpoint
-    Bridge:Request("Inventory", "PerformAction", item.Id, actionId)
-        :andThen(function(res)
-            self.Logger:Info("ActionSuccess", res.Msg)
-            -- Refresh Data agar UI update (Equipped status / Item removed)
-            return self:FetchData() 
-        end)
-        :catch(function(err)
-            self.Logger:Warn("ActionFail", err)
-        end)
-        :finally(function()
-            unlockUI() -- Selalu buka kunci tombol
-        end)
+    -- [FIX] Pake self.Guard
+    self.Guard.Run({ Debounce = 0.5 }, function()
+        -- [FIX] Pake self.Bridge
+        self.Bridge:Request("Inventory", "PerformAction", item.Id, actionId)
+            :andThen(function(res)
+                self.Logger:Info("ActionSuccess", res.Msg)
+                return self:FetchData() 
+            end)
+            :catch(function(err)
+                self.Logger:Warn("ActionFail", err)
+            end)
+            :finally(function()
+                unlockUI()
+            end)
+    end)
 end
 
 function Ctrl:FetchData()
-    return Bridge:Request("Inventory", "GetItems")
+    return self.Bridge:Request("Inventory", "GetItems")
         :andThen(function(items) 
             self.State.Items:set(items)
         end)
