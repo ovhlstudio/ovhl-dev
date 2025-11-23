@@ -1,34 +1,27 @@
+--!strict
 -- @Service: InventoryService
--- @Standard: OVHL v0.1.1 (Correct Bridge API)
+-- @Standard: OVHL v0.2.2 (Protocol Compliant)
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
-local Cfg = Loader.Module("Inventory", "SharedConfig")
+local Cfg = Loader.Module("Inventory").SharedConfig
 
 local Hub = {}
 
+-- Mock Database
 local MOCK_ITEMS = {
-	{ Id = 1, Name = "ini pedang mahal", Rarity = "Epic", Count = 1 },
-	{ Id = 2, Name = "Health Potion", Rarity = "Common", Count = 5 },
-	{ Id = 3, Name = "Mana Crystal", Rarity = "Rare", Count = 2 },
-	{ Id = 4, Name = "Legendary Orb", Rarity = "Legendary", Count = 1 },
-	{ Id = 5, Name = "Scrap Metal", Rarity = "Common", Count = 10 },
-	{ Id = 6, Name = "Mythic Crown", Rarity = "Mythic", Count = 1 },
+	{ Id = 1, Name = "Excalibur", Rarity = "Epic", Count = 1, Icon = "rbxassetid://13006407439", Equipped = false },
+	{ Id = 2, Name = "Health Potion", Rarity = "Common", Count = 5, Icon = "rbxassetid://12905487363", Equipped = false },
+	{ Id = 3, Name = "Mana Crystal", Rarity = "Rare", Count = 2, Icon = "", Equipped = false },
+	{ Id = 4, Name = "God Apple", Rarity = "Legendary", Count = 1, Icon = "", Equipped = false },
+    { Id = 5, Name = "Rusty Dagger", Rarity = "Common", Count = 1, Icon = "rbxassetid://13006407439", Equipped = false },
 }
 
 function Hub:Init(ctx)
 	self.Logger = ctx:CreateLogger("INVENTORY")
 	self.Network = ctx.Network
-	self.RateLimitCache = {}
-
-	-- Register Handler using Bridge v0.1.1 API
-	self.Handler = self.Network:Register("Inventory", {})
-
-	self.Handler.OnInvoke(function(player, requestName, ...)
-		if requestName == "GetItems" then
-			return self:GetItems(player)
-		end
-		return { Success = false, Error = "Unknown Request" }
-	end)
+	
+	self.Handler = self.Network:Register("Inventory", Cfg.Network)
+    self.Network:Bind("Inventory", self)
 
 	self.Logger:Info("System", "Inventory Network Active.")
 end
@@ -36,20 +29,40 @@ end
 function Hub:Start() end
 
 function Hub:GetItems(player)
-	local userId = player.UserId
-	local currentTime = os.time()
-	local lastFetch = self.RateLimitCache[userId] or 0
-	local rateLimitSeconds = 1
-
-	if currentTime - lastFetch < rateLimitSeconds then
-		return { Success = false, Error = "RateLimited", Wait = rateLimitSeconds - (currentTime - lastFetch) }
-	end
-
-	self.RateLimitCache[userId] = currentTime
-
-	self.Logger:Info("Data", { User = player.Name, Action = "FetchItems" })
-
+	self.Logger:Info("Data", { User = player.Name, Action = "FetchItems", Count = #MOCK_ITEMS })
 	return { Success = true, Data = MOCK_ITEMS }
+end
+
+function Hub:PerformAction(player, itemId, action)
+    local targetItem, index
+    for i, v in ipairs(MOCK_ITEMS) do
+        if v.Id == itemId then targetItem = v; index = i; break end
+    end
+    
+    if not targetItem then return { Success = false, Error = "Item not found" } end
+    
+    -- [FIX] Return harus dibungkus Data = { ... }
+    
+    if action == "Equip" then
+        targetItem.Equipped = not targetItem.Equipped
+        self.Logger:Info("Action", { User = player.Name, Act = action, Item = targetItem.Name, State = targetItem.Equipped })
+        
+        return { 
+            Success = true, 
+            Data = { Msg = targetItem.Equipped and "Equipped" or "Unequipped" } 
+        }
+        
+    elseif action == "Drop" then
+        table.remove(MOCK_ITEMS, index)
+        self.Logger:Info("Action", { User = player.Name, Act = action, Item = targetItem.Name })
+        
+        return { 
+            Success = true, 
+            Data = { Msg = "Dropped " .. targetItem.Name } 
+        }
+    end
+    
+    return { Success = false, Error = "Unknown Action" }
 end
 
 return Hub

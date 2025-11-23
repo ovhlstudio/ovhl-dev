@@ -1,3 +1,4 @@
+--!strict
 -- @Core: Signals (Event Bus)
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
 local Signal = Loader.Pkg("Signal")

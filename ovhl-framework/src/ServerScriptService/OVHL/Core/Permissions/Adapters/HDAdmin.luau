@@ -1,3 +1,4 @@
+--!strict
 -- @Adapter: HDAdmin
 -- Menghubungkan diri ke _G.HDAdminMain
 local RS = game:GetService("ReplicatedStorage")

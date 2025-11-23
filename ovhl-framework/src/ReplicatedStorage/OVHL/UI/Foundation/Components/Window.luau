@@ -1,3 +1,4 @@
+--!strict
 -- @Component: Window (Standard Offset)
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)

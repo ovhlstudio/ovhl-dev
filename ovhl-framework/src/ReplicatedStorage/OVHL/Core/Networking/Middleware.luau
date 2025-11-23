@@ -1,3 +1,4 @@
+--!strict
 -- @Core: Middleware (Chain of Responsibility)
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
 local Enums = Loader.Core("Networking/NetworkEnums")

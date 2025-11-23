@@ -1,3 +1,4 @@
+--!strict
 -- @Service: PermissionService (Lifecycle Fixed)
 local Players = game:GetService("Players")
 local SSS = game:GetService("ServerScriptService")

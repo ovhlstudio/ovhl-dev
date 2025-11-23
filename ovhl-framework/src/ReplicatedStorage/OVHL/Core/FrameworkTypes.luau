@@ -1,3 +1,4 @@
+--!strict
 -- @Core: FrameworkTypes
 -- Definisi Kontrak untuk Type Checking Luau
 local FrameworkTypes = {}

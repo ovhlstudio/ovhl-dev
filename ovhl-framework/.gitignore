@@ -8,3 +8,6 @@
 /*.rbxl.lock
 
 sourcemap.json
+
+# Lune Automation
+.lune/backups/

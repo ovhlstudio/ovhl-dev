@@ -1,3 +1,4 @@
+--!strict
 -- @Adapter: InternalDB
 -- Menyimpan Rank admin custom (selain HD Admin)
 local DataStoreService = game:GetService("DataStoreService")

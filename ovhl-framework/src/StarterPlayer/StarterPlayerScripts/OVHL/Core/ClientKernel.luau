@@ -1,3 +1,4 @@
+--!strict
 -- @Kernel: Client v0.4.0 (Standardized)
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")

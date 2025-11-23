@@ -1,0 +1,12 @@
+name = "OVHL_Enterprise"
+std = "roblox"
+
+# [CRITICAL] Jangan linting file definisi tipe
+exclude = ["**/*.d.luau", ".lune/types/**/*"]
+
+[rules]
+unused_variable = "allow"
+shadowing = "warn"
+global_usage = "warn"
+multiple_statements = "allow"
+incorrect_standard_library_use = "allow"

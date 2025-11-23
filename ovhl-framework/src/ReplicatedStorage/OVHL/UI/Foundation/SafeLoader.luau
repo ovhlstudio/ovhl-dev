@@ -1,3 +1,4 @@
+--!strict
 -- @Foundation: SafeLoader (With Telemetry)
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)

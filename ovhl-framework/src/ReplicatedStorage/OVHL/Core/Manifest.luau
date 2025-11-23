@@ -1,3 +1,4 @@
+--!strict
 -- @Core: Manifest (Single Source of Truth)
 -- Identitas & Versi Framework
 return {

@@ -1,3 +1,4 @@
+--!strict
 -- @Core: NetworkEnums
 -- Standar Status Code ala HTTP untuk Game Networking
 return table.freeze({

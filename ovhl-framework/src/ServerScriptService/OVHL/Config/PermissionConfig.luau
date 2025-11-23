@@ -1,3 +1,4 @@
+--!strict
 return {
     Provider = "HDAdmin", -- Options: "HDAdmin", "Internal"
     Settings = { 
