@@ -1,52 +1,47 @@
 --!strict
--- @Adapter: HDAdmin
--- Menghubungkan diri ke _G.HDAdminMain
+-- @Adapter: HDAdmin (REFACTORED)
 local RS = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local HD = {}
 local _api = nil
-local _scanning = false
 
-function HD.StartScan(logger)
-    if _api or _scanning then return end
-    _scanning = true
+-- Non-Blocking Wait Function
+function HD.WaitForAPI(timeout)
+    if _api then return true end
     
     local start = os.clock()
+    timeout = timeout or 5
     
-    task.spawn(function()
-        while (os.clock() - start) < 10 do
-            if _G.HDAdminMain then
-                _api = _G.HDAdminMain
-                break
+    -- Attempt 1: Check Global Directly
+    if _G.HDAdminMain then 
+        _api = _G.HDAdminMain
+        return true
+    end
+
+    -- Attempt 2: Scan safely
+    repeat
+        local setup = RS:FindFirstChild("HDAdminSetup")
+        if setup and setup:IsA("ModuleScript") then
+            local success, mod = pcall(require, setup)
+            if success and mod and mod.GetMain then
+                _api = mod:GetMain()
+                return true
             end
-            
-            local setup = RS:FindFirstChild("HDAdminSetup")
-            if setup then
-                local s, m = pcall(require, setup)
-                if s and m and m.GetMain then
-                    _api = m:GetMain()
-                    break
-                end
-            end
-            task.wait(1)
         end
         
-        -- [FIX] Logger Check sebelum Info/Warn (untuk menghindari crash)
-        if logger then
-            if _api then
-                logger:Info("Link", "HD Admin API Connected")
-            else
-                logger:Warn("Link", "HD Admin API Not Found (Timeout)")
-            end
-        end
-        _scanning = false
-    end)
+        task.wait(1) -- Polling acceptable here ONLY inside task.spawn context
+    until (os.clock() - start) > timeout
+    
+    return false
+end
+
+-- Fallback Function
+function HD.StartScan(logger)
+    -- Deprecated: Handled by Service Logic now
 end
 
 function HD.GetRank(player)
     if not _api then return 0 end
-    
     local s, cf = pcall(function() return _api:GetModule("cf") end)
     if s and cf then
         local id = cf:GetRankId(player)

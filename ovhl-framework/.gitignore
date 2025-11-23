@@ -2,6 +2,8 @@
 /ovhl-framework.rbxlx
 /Packages
 /lokal
+.run.sh
+.run.luau
 
 # Roblox Studio lock files
 /*.rbxlx.lock
@@ -9,5 +11,3 @@
 
 sourcemap.json
 
-# Lune Automation
-.lune/backups/

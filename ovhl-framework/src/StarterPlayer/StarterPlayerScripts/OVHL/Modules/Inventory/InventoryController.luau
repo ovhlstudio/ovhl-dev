@@ -41,6 +41,21 @@ function Ctrl:Start()
     self:FetchData()
 end
 
+-- [CRITICAL FIX] Memory Cleanup
+-- Metode ini dipersiapkan untuk dipanggil oleh Framework saat Controller di-unload
+-- atau saat Player Reset/Keluar (tergantung implementasi Framework Kernel kedepannya)
+function Ctrl:Shutdown()
+    if self._trove then
+        self._trove:Destroy()
+        self._trove = nil
+    end
+    -- Scope Fusion juga perlu dibersihkan jika Framework support hot-reload
+    if self.Scope and self.Scope.doCleanup then
+        self.Scope:doCleanup()
+        self.Scope = nil
+    end
+end
+
 function Ctrl:HandleAction(item, actionId, unlockUI)
     -- [FIX] Pake self.Guard
     self.Guard.Run({ Debounce = 0.5 }, function()
