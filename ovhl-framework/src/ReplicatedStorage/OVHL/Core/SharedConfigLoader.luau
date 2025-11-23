@@ -1,3 +1,4 @@
+--!strict
 -- @Core: SharedConfigLoader
 -- Mencari dan memuat SharedConfig dari folder Modules
 local RS = game:GetService("ReplicatedStorage")

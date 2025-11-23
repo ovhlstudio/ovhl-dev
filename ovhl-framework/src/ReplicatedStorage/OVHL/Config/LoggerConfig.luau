@@ -1,3 +1,4 @@
+--!strict
 return {
     DefaultLevel = "DEBUG", -- [FIX] Ganti dari INFO ke DEBUG agar semua narasi muncul
     UseEmoji = true,

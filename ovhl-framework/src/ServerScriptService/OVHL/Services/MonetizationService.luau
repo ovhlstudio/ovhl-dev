@@ -1,3 +1,4 @@
+--!strict
 -- @Service: MonetizationService
 local MarketplaceService = game:GetService("MarketplaceService")
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
@@ -7,6 +8,8 @@ local Handlers = {}
 
 function MonetizationService:Init(ctx)
     self.Logger = ctx:CreateLogger("SHOP")
+	self.Network = ctx.Network
+	self.Network:Bind("Monetization", self)
 end
 
 function MonetizationService:Start()

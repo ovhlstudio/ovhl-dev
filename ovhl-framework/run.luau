@@ -1,57 +1,94 @@
--- @Lune: Phase 9 Surgical Fix
--- @Target: API.luau (Inject Missing Themer)
--- @Method: Read-Modify-Write (No Overwrite)
--- @Strictness: MAX
-
+--!strict
 local fs = require("@lune/fs")
-local stdio = require("@lune/stdio")
 
-local TARGET_PATH = "src/ReplicatedStorage/OVHL/UI/Foundation/API.luau"
-local MISSING_KEY = "API.Themer"
-local INJECTION_PAYLOAD = "API.Themer = Onyx.Themer"
-local ANCHOR_PATTERN = "API%.Onyx%s*=%s*Onyx" -- Mencari baris: API.Onyx = Onyx
+local PATCHES = {}
 
-local function log(emoji, msg)
-	stdio.write(string.format("%s %s\n", emoji, msg))
+-- =============================================================================
+-- 🧠 OVHL FRAMEWORK CORE FIX (SMART CONFIG LOADER)
+-- =============================================================================
+-- Problem: Factory cuma nyari config di Modules/.../SharedConfig.
+-- Solusi: Tambah fallback search ke folder Config/Global.
+-- =============================================================================
+
+PATCHES["src/ReplicatedStorage/OVHL/Core/Framework.luau"] = [=[
+--!strict
+-- @Core: Framework (Central Factory - V2.1 Config Fix)
+-- @Role: Dependency Injector & Standardizer
+local RS = game:GetService("ReplicatedStorage")
+
+-- Internal Dependencies
+local Loader = require(RS.OVHL.Core.Loader)
+local SmartLogger = Loader.Core("SmartLogger")
+local ActionGuard = Loader.UI.Foundation.ActionGuard
+local Bridge = Loader.Core.Networking.Bridge
+
+local Framework = {}
+
+function Framework.CreateController(def)
+    local ctrl = def or {}
+    local name = ctrl.Name or "UnknownController"
+    
+    -- 1. Auto-Inject Logger & Tools
+    ctrl.Logger = SmartLogger.New(name:upper())
+    ctrl.Bridge = Bridge.New()
+    ctrl.Guard = ActionGuard
+    
+    -- 2. Auto-Load Config (SMART LOADER PATCH)
+    if ctrl.ConfigName then
+        local loadedConfig = nil
+        local loadSource = "None"
+
+        -- [STRATEGY A] Cek di Module Feature (Inventory, Shop)
+        local successA, resA = pcall(function() 
+            return Loader.Module(ctrl.ConfigName).SharedConfig 
+        end)
+        if successA and resA then
+            loadedConfig = resA
+            loadSource = "Module"
+        else
+            -- [STRATEGY B] Cek di Global Config Folder (SystemPanelConfig)
+            local successB, resB = pcall(function()
+                return Loader.Config(ctrl.ConfigName)
+            end)
+            if successB and resB then
+                loadedConfig = resB
+                loadSource = "GlobalConfig"
+            end
+        end
+
+        -- [RESULT CHECK]
+        if loadedConfig then
+            ctrl.Config = loadedConfig
+            ctrl.Logger:Debug("ConfigLoaded", {Source=loadSource, Name=ctrl.ConfigName})
+        else
+            -- CRITICAL ERROR: Jangan diam saja kalau config hilang!
+            ctrl.Logger:Error("ConfigCritical", "FAILED TO LOAD CONFIG: " .. ctrl.ConfigName)
+            -- Kita kasih table kosong biar gak error nil index, tapi tetep bakal malfungsi logicnya
+            ctrl.Config = { Meta = { Error = "Missing" }, UI = {}, Topbar = {} } 
+        end
+    end
+
+    -- 3. Lifecycle Wrapper
+    local originalInit = ctrl.Init
+    function ctrl:Init(ctx)
+        if originalInit then
+            -- Bungkus dengan pcall biar kalau Init error, gak matiin thread utama
+            local s, err = pcall(originalInit, self, ctx)
+            if not s then
+                ctrl.Logger:Error("InitCrash", err)
+            end
+        end
+    end
+
+    return ctrl
 end
 
-log("🔍", "STARTING SURGICAL OPERATION ON API.LUAU...")
+return Framework
+]=]
 
--- 1. VERIFIKASI FILE
-if not fs.isFile(TARGET_PATH) then
-	log("❌", "CRITICAL: File not found! " .. TARGET_PATH)
-	process.exit(1)
+print("\n🧠 PATCHING FRAMEWORK FACTORY...")
+for path, content in pairs(PATCHES) do
+	fs.writeFile(path, content)
+	print("✅ FIXED: " .. path)
 end
-
--- 2. BACA KONTEN ASLI (READ)
-local content = fs.readFile(TARGET_PATH)
-local originalSize = #content
-
--- 3. CEK KEBERADAAN (ANTI-DUPLIKASI)
-if content:find(MISSING_KEY, 1, true) then
-	log("✅", "API.Themer already exists. Operation aborted to prevent duplication.")
-	return
-end
-
--- 4. OPERASI SUNTIK (INJECT)
--- Kita cari definisi API.Onyx, lalu selipkan API.Themer di bawahnya.
-local newContent, count = content:gsub(ANCHOR_PATTERN, "%0\n" .. INJECTION_PAYLOAD)
-
-if count == 0 then
-	log("❌", "FAILED: Could not find anchor point (" .. ANCHOR_PATTERN .. ").")
-	log("ℹ️", "Cannot inject safely. Please check file structure.")
-	process.exit(1)
-end
-
--- 5. VERIFIKASI INTEGRITAS (CHECK SIZE)
-if #newContent <= originalSize then
-	log("⚠️", "WARNING: Content size did not increase. Injection might have failed.")
-	process.exit(1)
-end
-
--- 6. SIMPAN PERUBAHAN (WRITE)
-fs.writeFile(TARGET_PATH, newContent)
-
-log("💉", "INJECTION SUCCESSFUL.")
-log("📝", "Added: " .. INJECTION_PAYLOAD)
-log("📂", "File preserved: " .. TARGET_PATH)
+print("\n✨ FRAMEWORK NOW SEARCHES BOTH 'MODULES' AND 'CONFIG' FOLDERS.")

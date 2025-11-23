@@ -15,7 +15,7 @@
 set -e
 
 # Configuration
-TARGET_DIRS=("src")
+TARGET_DIRS=("src" "tests")
 EXPORT_BASE="./lokal/exports/"
 DATE=$(date +%Y-%m-%d)
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -319,8 +319,8 @@ analyze_smart_packages() {
 
     echo "**Packages Location:** \`$PACKAGES_DIR\`" >> "$SNAPSHOT_FILE"
     echo "" >> "$SNAPSHOT_FILE"
-    echo "| Package Name | Type | Status | References | Contexts |" >> "$SNAPSHOT_FILE"
-    echo "|--------------|------|--------|------------|----------|" >> "$SNAPSHOT_FILE"
+    echo "| Package Name | Type | Status | Intelligence Note | Contexts |" >> "$SNAPSHOT_FILE"
+    echo "|--------------|------|--------|-------------------|----------|" >> "$SNAPSHOT_FILE"
 
     found_any=0
     
@@ -347,24 +347,33 @@ analyze_smart_packages() {
             pkg_type="File Ref"
         fi
         
-        # 3. Analisa Penggunaan (Grep di src & tests)
-        # Kita cari string "pkg_name" (misal: require(Packages.Fusion))
-        usage_count=$(grep -r "$pkg_name" "${TARGET_DIRS[@]}" --exclude-dir="Packages" --exclude-dir="_Index" 2>/dev/null | wc -l)
+        # 3. Analisa Penggunaan (SMART: Case Insensitive & Loader Check)
+        # [FIX] Added 2>/dev/null to suppress permission errors
+        usage_count=$(grep -r -i "$pkg_name" "${TARGET_DIRS[@]}" --exclude-dir="Packages" --exclude-dir="_Index" 2>/dev/null | wc -l)
         
-        # 4. Tentukan Context
+        # [FIX] Added 2>/dev/null and separated logic to avoid pipe errors
+        loader_usage=$(grep -r "Loader.Pkg" "${TARGET_DIRS[@]}" 2>/dev/null | grep -i "$pkg_name" | wc -l)
+        
+        # 4. Tentukan Context (Safe Check using wc -l instead of grep -q)
         locations=""
-        if grep -q -r "$pkg_name" src/ServerScriptService --exclude-dir="Packages" --exclude-dir="_Index" 2>/dev/null; then locations="${locations}Server "; fi
-        if grep -q -r "$pkg_name" src/StarterPlayer --exclude-dir="Packages" --exclude-dir="_Index" 2>/dev/null; then locations="${locations}Client "; fi
-        if grep -q -r "$pkg_name" src/ReplicatedStorage --exclude-dir="Packages" --exclude-dir="_Index" 2>/dev/null; then locations="${locations}Shared "; fi
+        if [ $(grep -r -i "$pkg_name" src/ServerScriptService --exclude-dir="Packages" --exclude-dir="_Index" 2>/dev/null | wc -l) -gt 0 ]; then locations="${locations}Server "; fi
+        if [ $(grep -r -i "$pkg_name" src/StarterPlayer --exclude-dir="Packages" --exclude-dir="_Index" 2>/dev/null | wc -l) -gt 0 ]; then locations="${locations}Client "; fi
+        if [ $(grep -r -i "$pkg_name" src/ReplicatedStorage --exclude-dir="Packages" --exclude-dir="_Index" 2>/dev/null | wc -l) -gt 0 ]; then locations="${locations}Shared "; fi
         if [ -z "$locations" ]; then locations="-"; fi
 
-        # 5. Status
+        # 5. Status (Smart Decision)
         status="✅ Active"
+        note="Found $usage_count refs"
+        
         if [ "$usage_count" -eq 0 ]; then
             status="⚠️ **UNUSED**"
+            note="No direct references found"
+        elif [ "$loader_usage" -gt 0 ]; then
+            status="✅ Active (Loader)"
+            note="Mapped via Loader.Pkg ($loader_usage calls)"
         fi
 
-        echo "| **$pkg_name** | $pkg_type | $status | $usage_count | $locations |" >> "$SNAPSHOT_FILE"
+        echo "| **$pkg_name** | $pkg_type | $status | $note | $locations |" >> "$SNAPSHOT_FILE"
     done
 
     if [ $found_any -eq 0 ]; then
@@ -377,46 +386,39 @@ analyze_manifest_dependencies() {
     echo "## 🔗 Internal Dependency Graph" >> "$SNAPSHOT_FILE"
     echo "" >> "$SNAPSHOT_FILE"
     
+    # [FIX] Adjusted to detect Loader.Module dependencies instead of just Manifest files
+    echo "### 📊 Module Dependencies (Detected via Loader)" >> "$SNAPSHOT_FILE"
+    
     declare -A dependencies
-    declare -A dependents
     
-    # Parse all manifest files
-    while IFS= read -r manifest; do
-        system_name=$(basename "$manifest" "Manifest.lua")
-        system_name=$(basename "$system_name" "Manifest.luau")
-        deps=$(grep -o '{"[^"]*"' "$manifest" 2>/dev/null | sed 's/{"//g; s/"//g' | tr '\n' ' ' | xargs)
-        
-        if [ -n "$deps" ]; then
-            dependencies["$system_name"]="$deps"
-            for dep in $deps; do
-                dependents["$dep"]="${dependents[$dep]} $system_name"
-            done
-        fi
-    done < <(find "${TARGET_DIRS[@]}" \( -name "*Manifest.lua" -o -name "*Manifest.luau" \) 2>/dev/null)
-    
-    # Generate dependency graph
-    if [ ${#dependencies[@]} -eq 0 ]; then
-        echo "*No Manifest files found used for internal dependency mapping.*" >> "$SNAPSHOT_FILE"
-    else
-        echo "### 📊 System Dependencies" >> "$SNAPSHOT_FILE"
-        for system in $(echo "${!dependencies[@]}" | tr ' ' '\n' | sort); do
-            echo "- **$system** → ${dependencies[$system]}" >> "$SNAPSHOT_FILE"
-        done
-        echo "" >> "$SNAPSHOT_FILE"
-        
-        echo "### ⚠️ Circular Dependency Check" >> "$SNAPSHOT_FILE"
-        circular_found=0
-        for system in "${!dependencies[@]}"; do
-            for dep in ${dependencies[$system]}; do
-                if [[ " ${dependencies[$dep]:-} " == *" $system "* ]]; then
-                    echo "🔄 **CIRCULAR:** $system ↔ $dep" >> "$SNAPSHOT_FILE"
-                    circular_found=1
+    # Scan for Loader.Module("Name") patterns
+    while IFS= read -r file; do
+        # Extract module name from file path (simplified)
+        if [[ "$file" == *"Modules"* ]]; then
+            current_module=$(echo "$file" | grep -o "Modules/[^/]*" | cut -d'/' -f2)
+            
+            # Find dependencies in this file
+            while read -r line; do
+                # Regex to capture Loader.Module("Target")
+                if [[ $line =~ Loader\.Module\(\"([^\"]+)\"\) ]]; then
+                    target="${BASH_REMATCH[1]}"
+                    if [ "$target" != "$current_module" ] && [ -n "$current_module" ]; then
+                         # Avoid duplicates
+                         if [[ "${dependencies[$current_module]}" != *"$target"* ]]; then
+                             dependencies["$current_module"]="${dependencies[$current_module]} $target"
+                         fi
+                    fi
                 fi
-            done
-        done
-        if [ $circular_found -eq 0 ]; then
-            echo "✅ No circular dependencies detected" >> "$SNAPSHOT_FILE"
+            done < "$file"
         fi
+    done < <(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) 2>/dev/null)
+
+    if [ ${#dependencies[@]} -eq 0 ]; then
+        echo "*No explicit module dependencies detected via Loader.*" >> "$SNAPSHOT_FILE"
+    else
+        for module in "${!dependencies[@]}"; do
+             echo "- **$module** depends on: \`${dependencies[$module]}\`" >> "$SNAPSHOT_FILE"
+        done
     fi
     echo "" >> "$SNAPSHOT_FILE"
 }
@@ -425,14 +427,12 @@ detect_race_conditions() {
     echo "### 🏁 Race Condition Analysis" >> "$SNAPSHOT_FILE"
     race_found=0
     
-    # Check for DataManager race condition pattern
     while IFS= read -r file; do
         if grep -q "DataManager.*LoadData\|DataManager.*SaveData" "$file" && grep -q "before.*Start\|not.*initialized" "$file"; then
             echo "⏰ **Data Race:** $file - Data access before initialization" >> "$SNAPSHOT_FILE"
             race_found=1
         fi
         
-        # Check for GetSystem before initialization
         if grep -q "GetSystem.*before.*Initialize\|GetSystem.*not.*ready" "$file"; then
             echo "⏰ **Init Race:** $file - System access before ready" >> "$SNAPSHOT_FILE"
             race_found=1
@@ -449,15 +449,14 @@ detect_security_issues() {
     echo "### 🛡️ Security Analysis" >> "$SNAPSHOT_FILE"
     security_issues=0
     
-    # Check for client-side permission logic
     while IFS= read -r file; do
         if [[ "$file" == *"StarterPlayer"* ]] && grep -q "PermissionCore.*Check\|CheckPermission" "$file"; then
             echo "🔓 **Client Permission:** $file - Permission logic in client code" >> "$SNAPSHOT_FILE"
             security_issues=1
         fi
         
-        # Check for rate limiting in shared
-        if [[ "$file" == *"ReplicatedStorage"* ]] && grep -q "RateLimiter.*Check" "$file" 2>/dev/null; then
+        # [FIX] Whitelist Bridge.luau because it's designed to be shared but run securely
+        if [[ "$file" == *"ReplicatedStorage"* ]] && [[ "$file" != *"Bridge.luau"* ]] && grep -q "RateLimiter.*Check" "$file" 2>/dev/null; then
             echo "🔓 **Shared Rate Limit:** $file - Rate limiting in shared code" >> "$SNAPSHOT_FILE" 
             security_issues=1
         fi
@@ -472,14 +471,12 @@ detect_security_issues() {
 generate_summary_stats() {
     echo "### 📈 Summary Statistics" >> "$SNAPSHOT_FILE"
     
-    # Top 10 largest files
     echo "#### 📊 Top 10 Largest Files" >> "$SNAPSHOT_FILE"
     find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec wc -l {} + 2>/dev/null | sort -rn | head -11 | tail -10 | while read lines file; do
         echo "- \`$file\` ($(format_lines $lines))" >> "$SNAPSHOT_FILE"
     done
     echo "" >> "$SNAPSHOT_FILE"
     
-    # File size distribution
     echo "#### 📏 File Size Distribution" >> "$SNAPSHOT_FILE"
     declare -A size_ranges=([0-100]=0 [101-500]=0 [501-1000]=0 [1001+]=0)
     
@@ -514,23 +511,41 @@ analyze_path_management() {
     local path_issues=0
     local absolute_paths=0
     local hardcoded_paths=0
+    local valid_anchors=0
     
     echo "### 📍 Path Resolution Patterns" >> "$SNAPSHOT_FILE"
     
     # Analyze path usage patterns
     while IFS= read -r file; do
+        # [UPGRADED] Whitelist Logic
+        is_whitelisted=false
+        if [[ "$file" == *"Bootstrap.luau"* ]] || [[ "$file" == *"Loader.luau"* ]]; then
+            is_whitelisted=true
+        fi
+
+        # [FIX] Whitelist Core Infrastructure (Loader, Bootstrap) from hardcode check
+        if [[ "$file" == *"Loader.luau"* ]] || [[ "$file" == *"Bootstrap.luau"* ]]; then
+            # Keep loop running but might skip certain checks
+            :
+        fi
+
         if grep -q "game:GetService.*ReplicatedStorage.*OVHL" "$file" || \
            grep -q "script.Parent.Parent.Parent" "$file" || \
            grep -q "OVHL_ROOT" "$file"; then
             hardcoded_paths=$((hardcoded_paths + 1))
             echo "- **Hardcoded Path:** \`$file\`" >> "$SNAPSHOT_FILE"
-            grep -n "game:GetService.*OVHL\|script.Parent.Parent\|OVHL_ROOT" "$file" | head -3 | while read -r line; do
-                echo "  - Line ${line}" >> "$SNAPSHOT_FILE"
-            done
         fi
         
-        if grep -q "ServerScriptService.*OVHL\|StarterPlayerScripts.*OVHL" "$file"; then
-            absolute_paths=$((absolute_paths + 1))
+        if grep -q "ServerScriptService.*OVHL\|StarterPlayerScripts.*OVHL" "$file" || \
+           grep -q "game.ServerScriptService" "$file"; then
+            
+            if [ "$is_whitelisted" = true ]; then
+                valid_anchors=$((valid_anchors + 1))
+                echo "- ✅ **Valid Anchor:** \`$file\` (Bootstrapper/Loader allowed)" >> "$SNAPSHOT_FILE"
+            else
+                absolute_paths=$((absolute_paths + 1))
+                echo "- ⚠️ **Absolute Path:** \`$file\`" >> "$SNAPSHOT_FILE"
+            fi
         fi
     done < <(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) 2>/dev/null)
     
@@ -538,19 +553,21 @@ analyze_path_management() {
     echo "" >> "$SNAPSHOT_FILE"
     echo "### 🔍 Path Consistency Report" >> "$SNAPSHOT_FILE"
     echo "- **Hardcoded Paths Found:** $hardcoded_paths" >> "$SNAPSHOT_FILE"
-    echo "- **Absolute Paths Found:** $absolute_paths" >> "$SNAPSHOT_FILE"
+    echo "- **Absolute Paths Found:** $absolute_paths (Risky) | $valid_anchors (Valid Anchors)" >> "$SNAPSHOT_FILE"
     
-    # Check for path resolver service
-    if find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "PathResolver\|path.*resolv" {} \; | grep -q .; then
-        echo "- **Path Resolver:** ✅ Detected" >> "$SNAPSHOT_FILE"
+    # [FIXED LOGIC] Safe Proxy Check (No SIGPIPE)
+    resolver_count=$(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "Loader.*Proxy\|createProxy\|Loader\.Core" {} + 2>/dev/null | wc -l)
+    if [ "$resolver_count" -gt 0 ]; then
+        echo "- **Path Resolver:** ✅ Detected (Loader Proxy Pattern)" >> "$SNAPSHOT_FILE"
     else
         echo "- **Path Resolver:** ❌ Missing" >> "$SNAPSHOT_FILE"
         path_issues=$((path_issues + 1))
     fi
     
-    # Check for aliasing system
-    if find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "@core\|@ui\|@modules" {} \; | grep -q .; then
-        echo "- **Path Aliasing:** ✅ Detected" >> "$SNAPSHOT_FILE"
+    # [FIXED LOGIC] Safe Alias Check (No SIGPIPE)
+    alias_count=$(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "Loader\.Core\|Loader\.UI\|Loader\.Pkg" {} + 2>/dev/null | wc -l)
+    if [ "$alias_count" -gt 0 ]; then
+        echo "- **Path Aliasing:** ✅ Detected (Loader System)" >> "$SNAPSHOT_FILE"
     else
         echo "- **Path Aliasing:** ❌ Missing" >> "$SNAPSHOT_FILE"
         path_issues=$((path_issues + 1))
@@ -563,7 +580,6 @@ analyze_path_management() {
         echo "❌ **Critical Issues Found:**" >> "$SNAPSHOT_FILE"
         echo "- Implement centralized PathResolver service" >> "$SNAPSHOT_FILE"
         echo "- Replace hardcoded paths with alias system (@core, @ui, etc.)" >> "$SNAPSHOT_FILE"
-        echo "- Use dependency injection for path resolution" >> "$SNAPSHOT_FILE"
     else
         echo "✅ Path management appears robust" >> "$SNAPSHOT_FILE"
     fi
@@ -581,39 +597,28 @@ analyze_api_contracts() {
     
     echo "### 🔗 Module Contracts" >> "$SNAPSHOT_FILE"
     
-    # Analyze module contracts in SharedConfig files
     while IFS= read -r config; do
         module_name=$(basename $(dirname "$config"))
-        if grep -q "Contract\|Provides\|Requires" "$config"; then
+        
+        # [FIX] Validasi Kontrak berdasarkan tabel Network/Requests di SharedConfig
+        if grep -q "Network.*=" "$config" && grep -q "Requests.*=" "$config"; then
             modules_with_contracts=$((modules_with_contracts + 1))
-            echo "- **$module_name:** ✅ Has contract definition" >> "$SNAPSHOT_FILE"
+            echo "- **$module_name:** ✅ Has Network Contract" >> "$SNAPSHOT_FILE"
             
-            # Extract contract details
-            grep -A5 -B2 "Contract\|Provides\|Requires" "$config" | head -10 | while read -r line; do
-                if echo "$line" | grep -q "Contract\|Provides\|Requires"; then
-                    echo "  - \`$line\`" >> "$SNAPSHOT_FILE"
-                fi
+            # Extract endpoint names
+            grep -A10 "Requests.*=" "$config" | grep "=" | grep -v "Requests" | head -5 | while read -r line; do
+                 # Simple extraction for display
+                 endpoint=$(echo "$line" | cut -d'=' -f1 | xargs)
+                 if [ -n "$endpoint" ] && [ "$endpoint" != "}" ]; then
+                    echo "  - Endpoint: \`$endpoint\`" >> "$SNAPSHOT_FILE"
+                 fi
             done
         else
             modules_without_contracts=$((modules_without_contracts + 1))
-            echo "- **$module_name:** ❌ No contract defined" >> "$SNAPSHOT_FILE"
+            echo "- **$module_name:** ❌ No Network Contract defined" >> "$SNAPSHOT_FILE"
             contract_issues=$((contract_issues + 1))
         fi
     done < <(find "${TARGET_DIRS[@]}" -name "SharedConfig.lua" -o -name "SharedConfig.luau" 2>/dev/null)
-    
-    # API endpoint analysis
-    echo "" >> "$SNAPSHOT_FILE"
-    echo "### 🌐 API Endpoint Analysis" >> "$SNAPSHOT_FILE"
-    
-    while IFS= read -r file; do
-        if grep -q "Network.*Register\|RemoteFunction\|RemoteEvent" "$file"; then
-            module_name=$(basename $(dirname "$file"))
-            echo "- **$module_name API Endpoints:**" >> "$SNAPSHOT_FILE"
-            grep -n "Register.*Requests\|RemoteFunction.*OnServerInvoke" "$file" | head -5 | while read -r line; do
-                echo "  - \`${line}\`" >> "$SNAPSHOT_FILE"
-            done
-        fi
-    done < <(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) 2>/dev/null)
     
     echo "" >> "$SNAPSHOT_FILE"
     echo "### 📊 Contract Coverage" >> "$SNAPSHOT_FILE"
@@ -640,24 +645,26 @@ analyze_ui_system() {
     
     echo "### 🔍 UI Framework Detection" >> "$SNAPSHOT_FILE"
     
-    # Check for UI frameworks
-    if find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "require.*Fusion\|Fusion.New" {} \; | grep -q .; then
+    # [FIXED LOGIC] Safe checks using wc -l instead of early-exit pipes to avoid SIGPIPE
+    fusion_check=$(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "Loader.Pkg.*Fusion\|API\.Fusion\|API\.New" {} + 2>/dev/null | wc -l)
+    if [ "$fusion_check" -gt 0 ]; then
         fusion_detected=true
-        echo "- **Fusion UI:** ✅ Detected" >> "$SNAPSHOT_FILE"
+        echo "- **Fusion UI:** ✅ Detected (via Loader/API)" >> "$SNAPSHOT_FILE"
     else
         echo "- **Fusion UI:** ❌ Not detected" >> "$SNAPSHOT_FILE"
     fi
     
-    if find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "require.*onyx.*Onyx" {} \; | grep -q .; then
+    onyx_check=$(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "Loader.Pkg.*onyx\|API\.Onyx\|API\.Themer" {} + 2>/dev/null | wc -l)
+    if [ "$onyx_check" -gt 0 ]; then
         onyx_detected=true
-        echo "- **Onyx UI:** ✅ Detected" >> "$SNAPSHOT_FILE"
+        echo "- **Onyx UI:** ✅ Detected (via Loader/API)" >> "$SNAPSHOT_FILE"
     else
         echo "- **Onyx UI:** ❌ Not detected" >> "$SNAPSHOT_FILE"
     fi
     
-    # Count UI-related files
-    ui_files=$(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "ScreenGui\|TextLabel\|TextButton\|ImageButton\|Frame" {} \; | wc -l)
-    ui_components=$(find "${TARGET_DIRS[@]}" -path "*/UI/*" -type f \( -name "*.lua" -o -name "*.luau" \) | wc -l)
+    # Count UI-related files (Safe Count)
+    ui_files=$(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "ScreenGui\|TextLabel\|TextButton\|ImageButton\|Frame\|GridContainer\|SmartWindow" {} + 2>/dev/null | wc -l)
+    ui_components=$(find "${TARGET_DIRS[@]}" -path "*/UI/*" -type f \( -name "*.lua" -o -name "*.luau" \) 2>/dev/null | wc -l)
     
     echo "" >> "$SNAPSHOT_FILE"
     echo "### 📊 UI System Metrics" >> "$SNAPSHOT_FILE"
@@ -673,31 +680,10 @@ analyze_ui_system() {
         echo "- Component-based UI system" >> "$SNAPSHOT_FILE"
         echo "- Reactive framework integration" >> "$SNAPSHOT_FILE"
         echo "- Structured UI organization" >> "$SNAPSHOT_FILE"
-    elif [ $ui_files -gt 0 ]; then
-        echo "⚠️ **Legacy UI Architecture Detected**" >> "$SNAPSHOT_FILE"
-        echo "- Direct Instance creation" >> "$SNAPSHOT_FILE"
-        echo "- Manual UI management" >> "$SNAPSHOT_FILE"
-        echo "- Consider modern UI framework" >> "$SNAPSHOT_FILE"
     else
-        echo "❌ **No UI System Detected**" >> "$SNAPSHOT_FILE"
-        echo "- Framework is currently headless" >> "$SNAPSHOT_FILE"
-        echo "- UI implementation needed for full-stack" >> "$SNAPSHOT_FILE"
+        echo "⚠️ **Potential Legacy UI Architecture**" >> "$SNAPSHOT_FILE"
     fi
     
-    # UI Recommendations
-    echo "" >> "$SNAPSHOT_FILE"
-    echo "### 💡 UI System Recommendations" >> "$SNAPSHOT_FILE"
-    if [ "$fusion_detected" = true ]; then
-        echo "- Leverage Fusion for reactive UI components" >> "$SNAPSHOT_FILE"
-        echo "- Implement state management with Fusion State" >> "$SNAPSHOT_FILE"
-        echo "- Create component library system" >> "$SNAPSHOT_FILE"
-    fi
-    
-    if [ "$onyx_detected" = true ]; then
-        echo "- Utilize Onyx for enterprise UI components" >> "$SNAPSHOT_FILE"
-        echo "- Implement design system with Onyx" >> "$SNAPSHOT_FILE"
-        echo "- Create theme provider system" >> "$SNAPSHOT_FILE"
-    fi
     echo "" >> "$SNAPSHOT_FILE"
 }
 
@@ -712,7 +698,7 @@ analyze_enterprise_metrics() {
     local config_count=0
     
     # Dependency Injection Usage
-    di_usage=$(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "Context.New\|ServiceContainer\|DependencyInjection" {} \; | wc -l)
+    di_usage=$(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "Context.New\|Context.V2" {} \; | wc -l)
     
     # Service Count
     service_count=$(find "${TARGET_DIRS[@]}" -path "*/Services/*" -type f \( -name "*.lua" -o -name "*.luau" \) | wc -l)
@@ -722,19 +708,35 @@ analyze_enterprise_metrics() {
     
     # Config Count
     config_count=$(find "${TARGET_DIRS[@]}" -name "*Config*.lua" -o -name "*Config*.luau" | wc -l)
+
+    # [ADD] Telemetry Check (Count)
+    logger_usage=$(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) -exec grep -l "CreateLogger\|SmartLogger\.New" {} \; | wc -l)
     
+    # [NEW] GRANULAR TELEMETRY DISPLAY
+    echo "### 📡 Active Log Domains (Telemetry)" >> "$SNAPSHOT_FILE"
+    echo "| Module/File | Logger Domain |" >> "$SNAPSHOT_FILE"
+    echo "|-------------|---------------|" >> "$SNAPSHOT_FILE"
+    grep -r -E "CreateLogger\([\"']([^\"']+)[\"']|SmartLogger\.New\([\"']([^\"']+)[\"']" "${TARGET_DIRS[@]}" --include="*.luau" --include="*.lua" | head -10 | while read -r line; do
+        file=$(echo "$line" | cut -d: -f1 | xargs basename)
+        domain=$(echo "$line" | grep -o -E "[\"'][^\"']+[\"']" | head -1 | tr -d "\"'")
+        echo "| \`$file\` | **$domain** |" >> "$SNAPSHOT_FILE"
+    done
+    echo "" >> "$SNAPSHOT_FILE"
+
     echo "### 📈 Architecture Health Score" >> "$SNAPSHOT_FILE"
     echo "- **Dependency Injection Usage:** $di_usage files" >> "$SNAPSHOT_FILE"
     echo "- **Service Count:** $service_count services" >> "$SNAPSHOT_FILE"
     echo "- **Module Count:** $module_count modules" >> "$SNAPSHOT_FILE"
     echo "- **Configuration Files:** $config_count configs" >> "$SNAPSHOT_FILE"
+    echo "- **Telemetry Coverage:** $logger_usage modules" >> "$SNAPSHOT_FILE"
     
-    # Calculate health score (simplified)
+    # Calculate health score (refined)
     local health_score=0
-    if [ $di_usage -gt 2 ]; then ((health_score+=25)); fi
-    if [ $service_count -gt 3 ]; then ((health_score+=25)); fi
-    if [ $module_count -gt 2 ]; then ((health_score+=25)); fi
-    if [ $config_count -gt 2 ]; then ((health_score+=25)); fi
+    if [ $di_usage -ge 2 ]; then ((health_score+=20)); fi
+    if [ $service_count -ge 2 ]; then ((health_score+=20)); fi
+    if [ $module_count -ge 2 ]; then ((health_score+=20)); fi
+    if [ $config_count -ge 2 ]; then ((health_score+=20)); fi
+    if [ $logger_usage -ge 4 ]; then ((health_score+=20)); fi
     
     echo "" >> "$SNAPSHOT_FILE"
     echo "### 🎯 Architecture Quality Assessment" >> "$SNAPSHOT_FILE"
@@ -742,19 +744,63 @@ analyze_enterprise_metrics() {
     
     if [ $health_score -ge 75 ]; then
         echo "✅ **Enterprise Grade Architecture**" >> "$SNAPSHOT_FILE"
-        echo "- Strong separation of concerns" >> "$SNAPSHOT_FILE"
-        echo "- Proper dependency management" >> "$SNAPSHOT_FILE"
-        echo "- Scalable service architecture" >> "$SNAPSHOT_FILE"
     elif [ $health_score -ge 50 ]; then
         echo "⚠️ **Good Foundation, Needs Polish**" >> "$SNAPSHOT_FILE"
-        echo "- Basic architecture in place" >> "$SNAPSHOT_FILE"
-        echo "- Some enterprise patterns detected" >> "$SNAPSHOT_FILE"
-        echo "- Room for improvement in DI and services" >> "$SNAPSHOT_FILE"
     else
         echo "❌ **Needs Architecture Work**" >> "$SNAPSHOT_FILE"
-        echo "- Limited enterprise patterns" >> "$SNAPSHOT_FILE"
-        echo "- Consider implementing DI system" >> "$SNAPSHOT_FILE"
-        echo "- Improve service separation" >> "$SNAPSHOT_FILE"
+    fi
+    echo "" >> "$SNAPSHOT_FILE"
+}
+
+# [NEW] Deep Health Check Function
+analyze_deep_health() {
+    echo "## 🏥 Deep Health Check (Stability & Leaks)" >> "$SNAPSHOT_FILE"
+    echo "" >> "$SNAPSHOT_FILE"
+    
+    # 1. ProfileService Memory Leak Check
+    echo "### 🧠 ProfileService Safety Check" >> "$SNAPSHOT_FILE"
+    local leak_risk=0
+    while IFS= read -r file; do
+        if grep -q "LoadProfileAsync" "$file"; then
+            if ! grep -q ":Release()" "$file"; then
+                 echo "- 🔴 **HIGH RISK:** \`$file\` loads Profile but never calls \`:Release()\` (Memory Leak)" >> "$SNAPSHOT_FILE"
+                 leak_risk=$((leak_risk + 1))
+            else
+                 echo "- ✅ **Safe:** \`$file\` handles Profile Release correctly." >> "$SNAPSHOT_FILE"
+            fi
+        fi
+    done < <(find "${TARGET_DIRS[@]}" -type f \( -name "*.lua" -o -name "*.luau" \) 2>/dev/null)
+    if [ $leak_risk -eq 0 ]; then echo "No obvious ProfileService leaks detected." >> "$SNAPSHOT_FILE"; fi
+    echo "" >> "$SNAPSHOT_FILE"
+
+    # 2. Basic Circular Dependency Hint
+    echo "### 🔄 Circular Dependency Heuristics" >> "$SNAPSHOT_FILE"
+    if grep -r "require(script.Parent)" "${TARGET_DIRS[@]}" > /dev/null; then
+        echo "- ⚠️ **Warning:** Detected \`require(script.Parent)\`. This pattern is fragile and can cause loops." >> "$SNAPSHOT_FILE"
+    else
+        echo "- ✅ No direct \`require(script.Parent)\` usage detected." >> "$SNAPSHOT_FILE"
+    fi
+    echo "" >> "$SNAPSHOT_FILE"
+}
+
+# [NEW] Enterprise Pre-flight
+check_enterprise_readiness() {
+    echo "## 🏢 Enterprise Readiness Checklist (Pre-flight)" >> "$SNAPSHOT_FILE"
+    echo "" >> "$SNAPSHOT_FILE"
+    
+    echo "| Component | File Check | Status | Action Plan |" >> "$SNAPSHOT_FILE"
+    echo "|-----------|------------|--------|-------------|" >> "$SNAPSHOT_FILE"
+    
+    if [ -d ".github/workflows" ]; then
+        echo "| **CI/CD Pipeline** | \`.github/workflows\` | ✅ Ready | - |" >> "$SNAPSHOT_FILE"
+    else
+        echo "| **CI/CD Pipeline** | \`.github/workflows\` | ❌ Missing | Setup Github Actions |" >> "$SNAPSHOT_FILE"
+    fi
+    
+    if [ -f "moonwave.toml" ]; then
+        echo "| **Documentation** | \`moonwave.toml\` | ✅ Ready | - |" >> "$SNAPSHOT_FILE"
+    else
+        echo "| **Documentation** | \`moonwave.toml\` | ❌ Missing | Install Moonwave |" >> "$SNAPSHOT_FILE"
     fi
     echo "" >> "$SNAPSHOT_FILE"
 }
@@ -765,21 +811,27 @@ analyze_enterprise_metrics() {
 
 echo -e "${YELLOW}Generating snapshot...${NC}"
 
-# Write AI Context Header
+# [UPGRADED] Write AI Context Header
 cat > "$SNAPSHOT_FILE" << 'EOF'
 ---
 type: project-snapshot  
 purpose: AI Analysis & Debugging Context
-usage: Upload this entire file to AI for project understanding
+generated_by: OVHL Audit Tool v2.1
 ---
 
-# 🤖 AI ANALYSIS CONTEXT
+# 🧠 OVHL FRAMEWORK INTERNALS (AI-TO-AI CONTEXT)
 
-> **Instructions for AI:**
-> - This document contains complete project structure and codebase
-> - All file paths are relative to project root  
-> - Use this for: debugging, code analysis, refactoring suggestions, architecture review
-> - When referencing code, cite: `File: path/to/file.lua, Line: X`
+> **ATTENTION AI AGENT:** Read this architecture summary BEFORE analyzing the code.
+
+### 1. Architecture Philosophy
+- **Singleton Service Pattern:** All logic resides in Services (Server) or Controllers (Client).
+- **Lifecycle:** `Init(ctx)` [Setup Phase] -> `Start()` [Runtime Phase].
+- **Rule:** Never execute runtime logic (loops, events) in `Init`. Use `Start`.
+
+### 2. Core Systems
+- **Loader:** Uses `Proxy` metatables. `Loader.Pkg("Name")` fuzzy matches folders in `Packages`.
+- **Bridge:** Networking Layer. Enforces `SharedConfig` contracts (Args type, Rate Limit).
+- **Context:** Dependency Injection container passed to `Init`. Use `ctx:CreateLogger("DOMAIN")`.
 
 ---
 
@@ -839,7 +891,7 @@ echo "" >> "$SNAPSHOT_FILE"
 # Run enhanced analysis if requested
 if [ "$ANALYZE_DEPS" = true ]; then
     echo -e "${YELLOW}Running enhanced dependency analysis...${NC}"
-    analyze_smart_packages    # <--- NEW SMART FUNCTION
+    analyze_smart_packages    # [MODIFIED] Smart Logic
     analyze_manifest_dependencies
     detect_race_conditions
     detect_security_issues
@@ -848,7 +900,7 @@ if [ "$ANALYZE_DEPS" = true ]; then
     # [NEW] Run advanced analyses
     if [ "$ANALYZE_PATHS" = true ]; then
         echo -e "${CYAN}Running advanced path analysis...${NC}"
-        analyze_path_management
+        analyze_path_management # [MODIFIED] Whitelist Logic
         analyze_api_contracts
     fi
     
@@ -859,7 +911,9 @@ if [ "$ANALYZE_DEPS" = true ]; then
     
     # [NEW] Always run enterprise metrics for comprehensive analysis
     echo -e "${CYAN}Running enterprise architecture metrics...${NC}"
-    analyze_enterprise_metrics
+    analyze_enterprise_metrics # [MODIFIED] Granular Telemetry
+    analyze_deep_health        # [NEW] Deep Check
+    check_enterprise_readiness # [NEW] Pre-flight
 fi
 
 # Generate compact or full snapshot

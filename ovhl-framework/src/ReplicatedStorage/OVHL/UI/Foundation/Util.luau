@@ -1,3 +1,4 @@
+--!strict
 -- @Foundation: UI Utilities
 -- @Responsibility: Data Conversion & Asset Normalization
 local Util = {}

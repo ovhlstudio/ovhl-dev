@@ -1,3 +1,4 @@
+--!strict
 -- @Core: Bootstrap
 local RunService = game:GetService("RunService")
 local Bootstrap = {}
