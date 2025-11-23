@@ -1,3 +1,4 @@
+--!strict
 -- @Core: Env
 local RunService = game:GetService("RunService")
 

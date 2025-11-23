@@ -1,3 +1,4 @@
+--!strict
 -- @Core: SmartLogger
 -- @PortedFrom: Snapshot V4.0
 local HttpService = game:GetService("HttpService")

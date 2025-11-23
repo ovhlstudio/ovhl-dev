@@ -1,0 +1,9 @@
+{
+    "languageMode": "strict",
+    "aliases": {
+        "lune": "@lune"
+    },
+    "paths": {
+        "@lune/*": [".lune/types/lune"] 
+    }
+}

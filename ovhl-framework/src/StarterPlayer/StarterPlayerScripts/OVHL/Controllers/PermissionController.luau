@@ -1,3 +1,4 @@
+--!strict
 -- @Controller: PermissionController
 -- @Responsibility: Listen to Rank updates and notify system
 local Players = game:GetService("Players")

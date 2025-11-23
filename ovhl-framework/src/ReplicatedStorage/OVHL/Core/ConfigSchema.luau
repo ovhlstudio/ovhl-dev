@@ -1,3 +1,4 @@
+--!strict
 -- @Core: ConfigSchema
 -- Validasi struktur config agar tidak crash di runtime
 local ConfigSchema = {}
