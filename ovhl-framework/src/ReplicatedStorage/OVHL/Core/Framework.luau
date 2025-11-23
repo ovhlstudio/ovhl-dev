@@ -1,17 +1,4 @@
 --!strict
-local fs = require("@lune/fs")
-
-local PATCHES = {}
-
--- =============================================================================
--- 🧠 OVHL FRAMEWORK CORE FIX (SMART CONFIG LOADER)
--- =============================================================================
--- Problem: Factory cuma nyari config di Modules/.../SharedConfig.
--- Solusi: Tambah fallback search ke folder Config/Global.
--- =============================================================================
-
-PATCHES["src/ReplicatedStorage/OVHL/Core/Framework.luau"] = [=[
---!strict
 -- @Core: Framework (Central Factory - V2.1 Config Fix)
 -- @Role: Dependency Injector & Standardizer
 local RS = game:GetService("ReplicatedStorage")
@@ -84,11 +71,3 @@ function Framework.CreateController(def)
 end
 
 return Framework
-]=]
-
-print("\n🧠 PATCHING FRAMEWORK FACTORY...")
-for path, content in pairs(PATCHES) do
-	fs.writeFile(path, content)
-	print("✅ FIXED: " .. path)
-end
-print("\n✨ FRAMEWORK NOW SEARCHES BOTH 'MODULES' AND 'CONFIG' FOLDERS.")

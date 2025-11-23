@@ -1,10 +1,11 @@
 --!strict
+-- @Asset: Icon Registry (Updated)
 return table.freeze({
     Icons = {
-        Close = "rbxassetid://3926305904",
+        -- [FIX] Ganti ID Close ke yang lebih modern/HD (Lucide Style X)
+        Close = "rbxassetid://11293981586", 
         Loading = "rbxassetid://16960657067", 
     },
-    -- [UX] Fallback Images agar tidak kosong melompong
     Placeholders = {
         Sword = "rbxassetid://13006407439", 
         Potion = "rbxassetid://12905487363",
