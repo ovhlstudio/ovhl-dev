@@ -31,6 +31,7 @@ ovhl-framework/_Index/
 # Local Run Scripts (Sesuai Request)
 ovhl-framework/run.luau
 ovhl-framework/run.sh
+ovhl-framework/wally.lock
 
 # ===========================
 # 🗑️ LOGS & TEMP

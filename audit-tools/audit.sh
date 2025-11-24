@@ -2,7 +2,6 @@
 set -uo pipefail
 
 # --- LOAD CONFIG & LIBS ---
-# Pastikan script bisa jalan darimanapun (resolve absolute path)
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$DIR"
 
@@ -16,8 +15,8 @@ source lib/reporter.sh
 for mod in modules/*.sh; do source "$mod"; done
 
 # --- DEFAULT CONFIG ---
-DO_FULL_SCAN=true      # Menjalankan Security, Code, Arch
-DO_CODE_DUMP=true      # Menjalankan Copy Paste code ke MD
+DO_FULL_SCAN=true      
+DO_CODE_DUMP=true      
 REPORT_DIR="reports/$(date +%Y-%m-%d)"
 TIMESTAMP="$(date +%d%m%y-%H-%M-%S)"
 
@@ -25,7 +24,7 @@ TIMESTAMP="$(date +%d%m%y-%H-%M-%S)"
 show_menu() {
     clear
     echo -e "${CYAN}=============================================${NC}"
-    echo -e "${CYAN}   🕵️  OVHL AUDIT TOOL V3.3 (INTERACTIVE)    ${NC}"
+    echo -e "${CYAN}   🕵️  OVHL AUDIT TOOL V3.5 (STRICT MODE)    ${NC}"
     echo -e "${CYAN}=============================================${NC}"
     echo ""
     echo "Pilih Mode Audit:"
@@ -82,10 +81,8 @@ show_help() {
 
 # --- MAIN ARGUMENT PARSER ---
 if [ $# -eq 0 ]; then
-    # JIKA KOSONG -> MUNCULKAN MENU INTERAKTIF
     show_menu
 else
-    # JIKA ADA ARGUMEN -> PARSE FLAG
     while [[ $# -gt 0 ]]; do
         case $1 in
             -c|--compact)
@@ -123,8 +120,9 @@ if [ "$DO_FULL_SCAN" = "sec_only" ]; then SUFFIX="-security"; fi
 REPORT_FILE="$REPORT_DIR/ovhl-snapshot-${TIMESTAMP}${SUFFIX}.md"
 
 echo -e "${CYAN}Executing Audit...${NC}"
-echo -e "Target: ${YELLOW}$TARGET_ROOT${NC}"
-echo -e "Output: ${YELLOW}$REPORT_FILE${NC}"
+echo -e "Target Root: ${YELLOW}$TARGET_ROOT${NC}"
+echo -e "Scan Scope:  ${YELLOW}${SCAN_DIRS[*]}${NC}"
+echo -e "Output:      ${YELLOW}$REPORT_FILE${NC}"
 echo "-------------------------------------"
 
 # --- PHASE 1: HEADER & STATS (ALWAYS RUN) ---
@@ -144,46 +142,61 @@ if [ "$DO_FULL_SCAN" = true ]; then
 elif [ "$DO_FULL_SCAN" = "sec_only" ]; then
     echo -e "Skipping general analysis..."
     echo -e "⚔️ 🛡️  Running DEEP SECURITY Scan..."; run_security "$REPORT_FILE"
-    run_code_quality "$REPORT_FILE" # Code quality often relates to security
+    run_code_quality "$REPORT_FILE" 
 fi
 
-# --- PHASE 3: CODE DUMP (SMART GROUPED) ---
+# --- PHASE 3: CODE DUMP (SMART GROUPED & STRICT) ---
 if [ "$DO_CODE_DUMP" = true ]; then
-    echo -e "8/8 📝 Dumping Codebase (Categorized)..."
+    echo -e "8/8 📝 Dumping Codebase (Categorized & Strict)..."
     write_section "$REPORT_FILE" "📚 Complete Codebase Snapshot"
 
     dump_group() {
-        local title=$1; local pattern=$2
+        local title=$1; local regex=$2
         echo -e "\n### $title\n" >> "$REPORT_FILE"
-        find "$TARGET_ROOT" -type f -name "*.luau" | grep -E "$pattern" | sort | while read -r file; do
-            local name=$(basename "$file")
-            if ! check_exclusion "$name"; then
-                local rel_path="${file#$TARGET_ROOT/}"
-                smart_dump_file "$file" "$rel_path" >> "$REPORT_FILE"
+        
+        # Loop SCAN_DIRS (src, tests) agar tidak bocor ke root
+        for dir in "${SCAN_DIRS[@]}"; do
+            local search_path="$TARGET_ROOT/$dir"
+            
+            if [ -d "$search_path" ]; then
+                # Support .luau AND .lua
+                find "$search_path" -type f \( -name "*.luau" -o -name "*.lua" \) | \
+                grep -E "$regex" | sort | while read -r file; do
+                    
+                    local name=$(basename "$file")
+                    if ! check_exclusion "$name"; then
+                        local rel_path="${file#$TARGET_ROOT/}"
+                        smart_dump_file "$file" "$rel_path" >> "$REPORT_FILE"
+                    fi
+                done
             fi
         done
     }
 
+    # [REGEX UPDATE] Pake ^ (start of string) + TARGET_ROOT + /src/
+    # Biar ReplicatedStorage di dalam Tests gak ketarik disini
     echo "    - Group: Shared"
-    dump_group "🔄 Shared & Replicated" "ReplicatedStorage/|ReplicatedFirst/"
+    dump_group "🔄 Shared & Replicated" "^$TARGET_ROOT/src/ReplicatedStorage/|^$TARGET_ROOT/src/ReplicatedFirst/"
     
     echo "    - Group: Server"
-    dump_group "🖥️ Server Logic" "ServerScriptService/|ServerStorage/"
+    dump_group "🖥️ Server Logic" "^$TARGET_ROOT/src/ServerScriptService/|^$TARGET_ROOT/src/ServerStorage/"
     
     echo "    - Group: Client"
-    dump_group "🎮 Client Logic" "StarterPlayer/|StarterGui/|StarterPack/"
+    dump_group "🎮 Client Logic" "^$TARGET_ROOT/src/StarterPlayer/|^$TARGET_ROOT/src/StarterGui/|^$TARGET_ROOT/src/StarterPack/"
     
     echo "    - Group: Tests"
-    dump_group "🧪 Unit Tests" "tests/"
+    dump_group "🧪 Unit Tests" "^$TARGET_ROOT/tests/" 
     
-    # Misc Fallback
-    find "$TARGET_ROOT/src" -type f -name "*.luau" | \
-    grep -vE "ReplicatedStorage|ReplicatedFirst|ServerScriptService|ServerStorage|StarterPlayer|StarterGui|StarterPack|tests/" | \
-    sort | while read -r file; do
-        local name=$(basename "$file")
-        if ! check_exclusion "$name"; then
-            smart_dump_file "$file" "${file#$TARGET_ROOT/}" >> "$REPORT_FILE"
-        fi
+    # Misc Fallback (Strict Mode)
+    for dir in "${SCAN_DIRS[@]}"; do
+        find "$TARGET_ROOT/$dir" -type f \( -name "*.luau" -o -name "*.lua" \) | \
+        grep -vE "ReplicatedStorage|ReplicatedFirst|ServerScriptService|ServerStorage|StarterPlayer|StarterGui|StarterPack|tests/" | \
+        sort | while read -r file; do
+            local name=$(basename "$file")
+            if ! check_exclusion "$name"; then
+                smart_dump_file "$file" "${file#$TARGET_ROOT/}" >> "$REPORT_FILE"
+            fi
+        done
     done
 else
     echo "🚫 Code Dumping Skipped (Compact Mode)"

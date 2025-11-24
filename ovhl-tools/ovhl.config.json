@@ -1,0 +1,49 @@
+{
+  "project": {
+    "targetPath": "../ovhl-framework",
+    "rojoFile": "default.project.json"
+  },
+  "aiContext": {
+    "lifecycle": "Init(ctx) [Setup] -> Start() [Runtime] -> Shutdown() [Cleanup]",
+    "architecture": [
+      "**Pattern:** Singleton Service (Server) & Controller (Client).",
+      "**Memory:** Every module has `self.Trove` injected. USE IT for cleanup.",
+      "**Network:** NO manual RemoteEvents. Use `self.Bridge` with `SharedConfig` contracts.",
+      "**Logging:** NO print/warn. Use `self.Logger:Info()`, `:Debug()`, etc."
+    ],
+    "testing": "TestEZ is MANDATORY. Mirror src/ structure in tests/. No Logic without Tests."
+  },
+  "reporting": {
+    "outputDir": "./reports",
+    "timestampFormat": "YYYY-MM-DD_HH-mm-ss",
+    "maxHistory": 10,
+    "naming": {
+      "markdown": "ovhl-snapshot-{TIMESTAMP}",
+      "json": "ovhl-data-{TIMESTAMP}"
+    },
+    "layout": [
+      "01_Structure",
+      "06_Telemetry",
+      "03_Security",
+      "08_Reusability",
+      "02_Dependencies",
+      "04_CodeQuality",
+      "05_UIStack",
+      "07_BreakingChanges",
+      "99_Snapshot"
+    ]
+  },
+  "audit": {
+    "ignore": [
+      "**/Packages/**",
+      "**/_Index/**",
+      "**/node_modules/**"
+    ],
+    "maxSnapshotLines": 1000
+  },
+  "penalties": {
+    "raceCondition": 20,
+    "globalState": 5,
+    "missingTelemetry": 10
+  }
+}
