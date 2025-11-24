@@ -1,0 +1,38 @@
+# ===========================
+# 🖥️ GLOBAL OS & EDITOR JUNK
+# ===========================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+# Kecuali file workspace setting lu, ini boleh di-keep kalau tim pake setting sama
+!.vscode/*.code-workspace
+
+# ===========================
+# 🎮 ROBLOX STANDARD
+# ===========================
+# Ignore file binary Studio (Autosaves)
+*.rbxl
+*.rbxlx
+*.rbxl.lock
+*.rbxlx.lock
+
+# ===========================
+# 📦 OVHL FRAMEWORK (LUA)
+# ===========================
+# Wally Packages (Ini folder hasil install, jangan diupload)
+ovhl-framework/Packages/
+ovhl-framework/_Index/
+
+# Wally Lockfile (OPTIONAL: Biasanya wally.lock HARUS diupload biar versi konsisten)
+# Kalau lu mau ignore lockfile juga, uncomment baris bawah:
+# ovhl-framework/wally.lock
+
+# Local Run Scripts (Sesuai Request)
+ovhl-framework/run.luau
+ovhl-framework/run.sh
+
+# ===========================
+# 🗑️ LOGS & TEMP
+# ===========================
+*.log

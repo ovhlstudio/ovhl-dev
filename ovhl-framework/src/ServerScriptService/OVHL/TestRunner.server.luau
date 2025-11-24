@@ -1,29 +1,63 @@
 --!strict
--- @System: TestRunner (Studio Only)
-local RS = game:GetService("ReplicatedStorage")
-local SS = game:GetService("ServerScriptService")
+-- @System: TestRunner (Server Side)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 local RunService = game:GetService("RunService")
 
-if not RunService:IsStudio() then return end
+-- Cuma jalan di Studio biar gak ganggu Production game
+if not RunService:IsStudio() then
+	return
+end
 
 task.defer(function()
-	task.wait(1)
-	print("\n🧪 OVHL UNIT TESTS STARTING...")
-	
-	-- Try Load TestEZ via Loader OR Direct Path
-	local Loader = require(RS.OVHL.Core.Loader)
-	local TestEZ
-    pcall(function() TestEZ = Loader.Pkg("TestEZ") end)
-    if not TestEZ then 
-        -- Fallback for old Loader or direct usage
-        pcall(function() TestEZ = require(RS.Packages.TestEZ) end)
-    end
+	-- Tunggu sebentar biar loading game/plugin selesai dulu
+	task.wait(2)
 
-	if TestEZ then
-		local results = TestEZ.TestBootstrap:run({ RS.OVHL, SS.OVHL })
-		if results.failureCount > 0 then warn("❌ TESTS FAILED: "..results.failureCount)
-		else print("✅ ALL TESTS PASSED") end
+	print("\n🧪 [SERVER] STARTING TEST RUNNER...")
+
+	-- 1. Load TesEZ (Pake Loader framework lu biar konsisten)
+	local Loader = require(ReplicatedStorage.OVHL.Core.Loader)
+	local TesEZ
+
+	pcall(function()
+		TesEZ = Loader.Pkg("TestEZ") -- Atau require(ReplicatedStorage.Packages.TestEZ)
+	end)
+
+	if not TesEZ then
+		warn("⚠️ [SERVER] TesEZ not found! Please run 'wally install'.")
+		return
+	end
+
+	-- 2. Tentukan Folder Target (Sesuai Mapping Rojo yang baru)
+	-- Kita pake WaitForChild biar aman kalau loadingnya telat dikit
+	local testRoots = {
+		ReplicatedStorage:WaitForChild("Tests", 10), -- Shared Tests
+		ServerScriptService:WaitForChild("Tests", 10), -- Server Tests
+	}
+
+	-- Filter kalau foldernya ternyata kosong/gak ke-sync
+	local validRoots = {}
+	for _, folder in ipairs(testRoots) do
+		if folder then
+			table.insert(validRoots, folder)
+		else
+			warn("⚠️ [SERVER] Missing Test Folder (Check Rojo Mapping)")
+		end
+	end
+
+	if #validRoots == 0 then
+		warn("⚠️ [SERVER] No tests found to run.")
+		return
+	end
+
+	-- 3. JALANIN TES!
+	print("📂 [SERVER] Scanning folders: " .. #validRoots)
+	local results = TesEZ.TestBootstrap:run(validRoots)
+
+	-- 4. Laporan
+	if results.failureCount > 0 then
+		warn("❌ [SERVER] FAILED: " .. results.failureCount .. " tests broken.")
 	else
-		warn("⚠️ TestEZ not found. Run 'wally install'.")
+		print("✅ [SERVER] SUCCESS: All systems normal.")
 	end
 end)
