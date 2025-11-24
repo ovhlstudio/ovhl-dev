@@ -2,8 +2,8 @@
 -- @Foundation: SafeLoader (With Telemetry)
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
-local Fusion = Loader.Pkg("Fusion")
-local SmartLogger = Loader.Core("SmartLogger")
+local Fusion = Loader.Get("Fusion")
+local SmartLogger = Loader.Get("Logger")
 
 local SafeLoader = {}
 local Logger = SmartLogger.New("USER_INTERFACE")

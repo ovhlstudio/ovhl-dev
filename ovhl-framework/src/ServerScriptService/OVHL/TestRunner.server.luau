@@ -20,7 +20,7 @@ task.defer(function()
 	local TesEZ
 
 	pcall(function()
-		TesEZ = Loader.Pkg("TestEZ") -- Atau require(ReplicatedStorage.Packages.TestEZ)
+		TesEZ = Loader.Get("TestEZ") -- Atau require(ReplicatedStorage.Packages.TestEZ)
 	end)
 
 	if not TesEZ then

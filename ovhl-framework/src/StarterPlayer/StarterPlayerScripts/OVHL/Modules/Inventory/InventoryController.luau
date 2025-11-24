@@ -4,10 +4,10 @@ local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
 local OVHL = require(RS.OVHL.Core.Framework)
 
-local UI = Loader.UI.Foundation.API
+local UI = Loader.Get("API")
 local Fusion = UI.Fusion
-local Trove = Loader.Pkg("Trove")
-local Topbar = Loader.UI.Foundation.Bridges.Topbar
+local Trove = Loader.Get("Trove")
+local Topbar = Loader.Get("Topbar")
 local InventoryView = Loader.UI.Views.Inventory.InventoryView
 
 local Ctrl = OVHL.CreateController({

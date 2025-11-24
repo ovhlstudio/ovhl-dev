@@ -9,7 +9,7 @@ local PlayerGui = Player:WaitForChild("PlayerGui")
 
 -- [DEPENDENCIES]
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
-local Logger = Loader.Core("SmartLogger").New("UI")
+local Logger = Loader.Get("Logger").New("UI")
 
 local Finder = {}
 

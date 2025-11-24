@@ -1,7 +1,7 @@
 --!strict
 -- @View: ShopView
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
-local UI = Loader.UI.Foundation.API
+local UI = Loader.Get("API")
 local Children = UI.Children
 
 return function(scope, props)

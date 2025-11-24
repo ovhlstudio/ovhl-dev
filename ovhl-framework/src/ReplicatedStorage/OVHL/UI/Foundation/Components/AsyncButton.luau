@@ -3,7 +3,7 @@
 -- @Standard: OVHL Gold (With UX Logs)
 
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
-local SmartLogger = Loader.Core.SmartLogger
+local SmartLogger = Loader.Get("Logger")
 local UXLogger = SmartLogger.New("UX") -- [CRITICAL] Logger khusus User Experience
 
 return function(API)

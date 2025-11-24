@@ -6,7 +6,7 @@ local SS = game:GetService('ServerScriptService')
 
 local Guard = require(SS.OVHL.Core.NetworkGuard)
 local Loader = require(RS.OVHL.Core.Loader)
-local TypeValidator = Loader.Core("TypeValidator")
+local TypeValidator = Loader.Get("TypeValidator")
 
 local Bridge = {}
 Bridge.__index = Bridge

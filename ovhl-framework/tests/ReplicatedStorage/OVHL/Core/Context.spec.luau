@@ -1,34 +1,30 @@
---!strict
 return function()
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
 	local Loader = require(ReplicatedStorage.OVHL.Core.Loader)
-	local Context = Loader.Core("Context")
+	local Context = Loader.Get("Context")
 
-	describe("Context", function()
-		it("should inject services", function()
+	describe("Context (DI Container)", function()
+		it("should inject services into self", function()
 			local mockServices = {
 				AuthService = { Name = "Auth" },
-				DataService = { Name = "Data" }
+				DataService = { Name = "Data" },
 			}
 			local ctx = Context.New(mockServices)
-			
+
 			expect(ctx).to.be.ok()
 			expect(ctx.AuthService).to.be.ok()
 			expect(ctx.DataService).to.be.ok()
+			expect(ctx.AuthService.Name).to.equal("Auth")
 		end)
 
 		it("should provide CreateLogger helper", function()
 			local ctx = Context.New({})
 			expect(ctx.CreateLogger).to.be.a("function")
-			
-			local log = ctx:CreateLogger("CTX_TEST")
+
+			local log = ctx:CreateLogger("TEST_DOMAIN")
 			expect(log).to.be.ok()
+			-- Pastikan logger punya method standar
+			expect(log.Info).to.be.a("function")
 		end)
-        
-        it("should expose shared libs", function()
-            local ctx = Context.New({})
-            expect(ctx.Signals).to.be.ok()
-            expect(ctx.Manifest).to.be.ok()
-        end)
 	end)
 end

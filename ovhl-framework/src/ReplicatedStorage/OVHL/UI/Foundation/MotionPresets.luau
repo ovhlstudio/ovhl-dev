@@ -1,8 +1,8 @@
 --!strict
 -- @Foundation: MotionPresets v2.0 (Directional)
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
-local Fusion = Loader.Pkg("Fusion")
-local Motion = Loader.UI.Foundation.Motion
+local Fusion = Loader.Get("Fusion")
+local Motion = Loader.Get("Motion")
 
 local Presets = {}
 

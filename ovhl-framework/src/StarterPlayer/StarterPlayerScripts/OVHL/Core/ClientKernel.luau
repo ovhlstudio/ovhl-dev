@@ -5,11 +5,11 @@ local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
 
 -- [STANDARD] Load Core Systems yang BENAR-BENAR ADA
-local ConfigLoader = Loader.Core("SharedConfigLoader")
-local Bridge = Loader.Core("Networking/Bridge")
-local Context = Loader.Core("Context")
-local SmartLogger = Loader.Core("SmartLogger")
-local Manifest = Loader.Core("Manifest")
+local ConfigLoader = Loader.Get("ConfigLoader")
+local Bridge = Loader.Get("Bridge")
+local Context = Loader.Get("Context")
+local SmartLogger = Loader.Get("Logger")
+local Manifest = Loader.Get("Manifest")
 
 local ClientKernel = {}
 

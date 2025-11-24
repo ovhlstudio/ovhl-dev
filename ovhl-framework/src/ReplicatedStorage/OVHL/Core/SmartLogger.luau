@@ -5,7 +5,7 @@ local HttpService = game:GetService("HttpService")
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
 
 local Config = Loader.Config("LoggerConfig")
-local Env = Loader.Core("Env")
+local Env = Loader.Get("Env")
 
 local SmartLogger = {}
 SmartLogger.__index = SmartLogger

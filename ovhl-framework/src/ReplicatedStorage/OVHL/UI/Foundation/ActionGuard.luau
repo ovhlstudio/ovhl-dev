@@ -3,7 +3,7 @@
 -- @Role: Mencegah Spam, Race Condition, dan Menghandle Confirmation Flow
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
-local Signals = Loader.Core("Signals")
+local Signals = Loader.Get("Signals")
 
 local ActionGuard = {}
 local _isBusy = false -- Global Lock
