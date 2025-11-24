@@ -1,45 +1,51 @@
 {
-  "name": "OVHL_Framework",
-  "tree": {
-    "$className": "DataModel",
-    "Lighting": {
-      "$className": "Lighting",
-      "$ignoreUnknownInstances": true
-    },
-    "ReplicatedStorage": {
-      "$className": "ReplicatedStorage",
-      "$ignoreUnknownInstances": true,
-      "OVHL": {
-        "$path": "src/ReplicatedStorage/OVHL"
-      },
-      "Packages": {
-        "$path": "Packages"
-      },
-      "Tests": {
-        "$path": "tests"
-      }
-    },
-    "ServerScriptService": {
-      "$className": "ServerScriptService",
-      "$ignoreUnknownInstances": true,
-      "OVHL": {
-        "$path": "src/ServerScriptService/OVHL"
-      }
-    },
-    "StarterPlayer": {
-      "$className": "StarterPlayer",
-      "$ignoreUnknownInstances": true,
-      "StarterPlayerScripts": {
-        "$className": "StarterPlayerScripts",
-        "$ignoreUnknownInstances": true,
-        "OVHL": {
-          "$path": "src/StarterPlayer/StarterPlayerScripts/OVHL"
-        }
-      }
-    },
-    "Workspace": {
-      "$className": "Workspace",
-      "$ignoreUnknownInstances": true
-    }
-  }
+	"name": "OVHL_Framework",
+	"tree": {
+		"$className": "DataModel",
+		"Lighting": {
+			"$className": "Lighting",
+			"$ignoreUnknownInstances": true
+		},
+		"ReplicatedStorage": {
+			"$className": "ReplicatedStorage",
+			"$ignoreUnknownInstances": true,
+			"OVHL": {
+				"$path": "src/ReplicatedStorage/OVHL"
+			},
+			"Packages": {
+				"$path": "Packages"
+			},
+			"Tests": {
+				"$path": "tests/ReplicatedStorage"
+			}
+		},
+		"ServerScriptService": {
+			"$className": "ServerScriptService",
+			"$ignoreUnknownInstances": true,
+			"OVHL": {
+				"$path": "src/ServerScriptService/OVHL"
+			},
+			"Tests": {
+				"$path": "tests/ServerScriptService"
+			}
+		},
+		"StarterPlayer": {
+			"$className": "StarterPlayer",
+			"$ignoreUnknownInstances": true,
+			"StarterPlayerScripts": {
+				"$className": "StarterPlayerScripts",
+				"$ignoreUnknownInstances": true,
+				"OVHL": {
+					"$path": "src/StarterPlayer/StarterPlayerScripts/OVHL"
+				},
+				"Tests": {
+					"$path": "tests/StarterPlayer/StarterPlayerScripts"
+				}
+			}
+		},
+		"Workspace": {
+			"$className": "Workspace",
+			"$ignoreUnknownInstances": true
+		}
+	}
 }
