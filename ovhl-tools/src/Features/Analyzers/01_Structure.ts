@@ -14,18 +14,8 @@ export default class StructureAnalyzer implements IFeature {
         const root = ctx.data.rootPath;
         const ignorePatterns = ctx.data.config.audit?.ignore || ['**/Packages/**', '**/_Index/**', '**/node_modules/**'];
 
-        // 1. SCAN FOLDERS (Agar folder kosong tetap muncul)
-        const folders = await fastGlob(['**/**'], {
-            cwd: root,
-            onlyDirectories: true,
-            ignore: ignorePatterns
-        });
-
-        // 2. SCAN FILES (Untuk statistik & tree)
-        const files = await fastGlob(['**/*.{lua,luau}'], { 
-            cwd: root, 
-            ignore: ignorePatterns 
-        });
+        const folders = await fastGlob(['**/**'], { cwd: root, onlyDirectories: true, ignore: ignorePatterns });
+        const files = await fastGlob(['**/*.{lua,luau}'], { cwd: root, ignore: ignorePatterns });
 
         let totalSize = 0;
         let totalLines = 0;
@@ -38,11 +28,8 @@ export default class StructureAnalyzer implements IFeature {
             Unknown:{ count: 0, lines: 0 }
         };
 
-        // TREE BUILDER
-        // Kita pakai object dengan metadata khusus '__type' untuk membedakan file/folder
         const treeStructure: any = {};
 
-        // A. Build Skeleton dari Folder
         for (const folder of folders) {
             const parts = folder.split('/');
             let current = treeStructure;
@@ -52,7 +39,6 @@ export default class StructureAnalyzer implements IFeature {
             }
         }
 
-        // B. Isi Daging dari File
         for (const file of files) {
             const fullPath = path.join(root, file);
             const content = await fs.readFile(fullPath, 'utf-8');
@@ -63,8 +49,6 @@ export default class StructureAnalyzer implements IFeature {
             totalLines += lines;
 
             const group = ctx.services.rojo.getGroup(fullPath);
-            
-            // Simplified grouping mapping
             let statKey = 'Unknown';
             if (group.includes('Server')) statKey = 'Server';
             else if (group.includes('Client')) statKey = 'Client';
@@ -76,17 +60,12 @@ export default class StructureAnalyzer implements IFeature {
                 stats[statKey].lines += lines;
             }
 
-            // Insert File to Tree
             const parts = file.split('/');
             let current = treeStructure;
             for (let i = 0; i < parts.length; i++) {
                 const part = parts[i];
-                if (!current[part]) current[part] = { '__type': 'folder' }; // Default parent is folder
-                
-                if (i === parts.length - 1) {
-                    // Ini adalah File (Leaf)
-                    current[part]['__type'] = 'file';
-                }
+                if (!current[part]) current[part] = { '__type': 'folder' };
+                if (i === parts.length - 1) current[part]['__type'] = 'file';
                 current = current[part];
             }
         }
@@ -107,32 +86,30 @@ export default class StructureAnalyzer implements IFeature {
         }
 
         md += '\n### 🌳 Project Scaffold\n';
-        md += `\`\`\`text\n${treeString}\n\`\`\``;
+        // [VISUAL FIX] Use Tilde (~~~) instead of backticks to prevent nested code block issues
+        md += `~~~text\n${treeString}\n~~~`;
+        
+        md += '\n> **👮‍♂️ OVHL LAW: STRUCTURE**\n';
+        md += '> *   **Server:** Logic that never trusts the client (DB, Auth).\n';
+        md += '> *   **Client:** Visuals & Input handling only.\n';
+        md += '> *   **Shared:** Configs, Constants, & Utility functions.\n';
 
         ctx.addSection(this.id, '📁 Project Structure', md);
     }
 
     private generateAsciiTree(tree: any, prefix = ''): string {
         let output = '';
-        // Filter keys yang bukan metadata internal
         const keys = Object.keys(tree).filter(k => k !== '__type').sort();
-        
         keys.forEach((key, index) => {
             const isLast = index === keys.length - 1;
             const connector = isLast ? '└── ' : '├── ';
             const childPrefix = isLast ? '    ' : '│   ';
-            
             const node = tree[key];
             const isFile = node['__type'] === 'file';
             const icon = isFile ? '🌙' : '📁';
-            
             output += `${prefix}${connector}${icon} ${key}\n`;
-            
-            // Recurse jika ini folder dan punya anak (selain __type)
             const children = Object.keys(node).filter(k => k !== '__type');
-            if (!isFile && children.length > 0) {
-                output += this.generateAsciiTree(node, prefix + childPrefix);
-            }
+            if (!isFile && children.length > 0) output += this.generateAsciiTree(node, prefix + childPrefix);
         });
         return output;
     }

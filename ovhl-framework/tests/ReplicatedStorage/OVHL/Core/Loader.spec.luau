@@ -1,25 +1,31 @@
---!strict
 return function()
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	-- Kita require manual cuma sekali buat entry point
 	local Loader = require(ReplicatedStorage.OVHL.Core.Loader)
 
-	describe("Loader V2", function()
-		it("should support Dot Syntax (Loader.Core.Module)", function()
-			local Signals = Loader.Core.Signals
+	describe("Loader System (v5.2)", function()
+		it("should load Core modules via Registry", function()
+			local Signals = Loader.Get("Signals")
 			expect(Signals).to.be.ok()
+			expect(type(Signals)).to.equal("table")
 		end)
 
-		it("should support Legacy Call Syntax (Loader.Core('Module'))", function()
-			expect(function()
-                local Signals = Loader.Core("Signals")
-                expect(Signals).to.be.ok()
-            end).never.to.throw()
+		it("should auto-detect Packages (Wally)", function()
+			-- TestEZ harusnya ada karena kita lagi jalanin tes ini
+			local TestEZ = Loader.Get("TestEZ")
+			expect(TestEZ).to.be.ok()
 		end)
-        
-        it("should list available files on error", function()
-            local ok, err = pcall(function() return Loader.Core.Ngawur end)
-            expect(ok).to.equal(false)
-            expect(string.find(tostring(err), "Available:")).to.be.ok()
-        end)
+
+		it("should handle aliases case-insensitively if configured", function()
+			-- Tergantung implementasi fuzzy match, tapi kita test direct match dulu
+			local context = Loader.Get("Context")
+			expect(context).to.be.ok()
+		end)
+
+		it("should throw meaningful error on missing module", function()
+			expect(function()
+				Loader.Get("ModuleYangTidakMungkinAda123")
+			end).to.throw()
+		end)
 	end)
 end

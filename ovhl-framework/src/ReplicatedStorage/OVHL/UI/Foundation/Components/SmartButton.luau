@@ -2,7 +2,7 @@
 -- @Component: SmartButton (With Telemetry)
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
-local SmartLogger = Loader.Core("SmartLogger")
+local SmartLogger = Loader.Get("Logger")
 
 -- Logger khusus interaksi User
 local UXLogger = SmartLogger.New("UX") 

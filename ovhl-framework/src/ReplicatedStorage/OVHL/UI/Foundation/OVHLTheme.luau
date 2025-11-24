@@ -1,9 +1,9 @@
 --!strict
 -- @UI: OVHLTheme (Enterprise Design Tokens)
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
-local Fusion = Loader.Pkg("Fusion")
-local Onyx = Loader.Pkg("onyx-ui")
-local Util = Loader.UI.Foundation.Util
+local Fusion = Loader.Get("Fusion")
+local Onyx = Loader.Get("Onyx")
+local Util = Loader.Get("Util")
 
 local Scope = Fusion.scoped(Fusion)
 

@@ -2,7 +2,7 @@
 -- @Component: Window (Standard Offset)
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
-local SmartLogger = Loader.Core("SmartLogger")
+local SmartLogger = Loader.Get("Logger")
 
 local Logger = SmartLogger.New("UI_LAYOUT")
 

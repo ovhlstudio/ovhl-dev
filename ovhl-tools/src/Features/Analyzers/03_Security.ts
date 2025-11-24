@@ -3,7 +3,6 @@ import fs from 'fs-extra';
 import path from 'path';
 import { IFeature } from '../IFeature.js';
 import { Context } from '../../Core/Context.js';
-import { LuaUtils } from '../../Utils/LuaUtils.js';
 
 export default class SecurityAnalyzer implements IFeature {
     id = '03_Security';
@@ -18,8 +17,10 @@ export default class SecurityAnalyzer implements IFeature {
         for (const file of files) {
             const content = await fs.readFile(path.join(root, file), 'utf-8');
             const lines = content.split('\n');
-            const fileNameNoExt = path.basename(file).split('.')[0]; 
             
+            const returnMatch = content.match(/return\s+([A-Za-z0-9_]+)\s*$/m);
+            const returnedModuleVar = returnMatch ? returnMatch[1] : null;
+
             lines.forEach((line, idx) => {
                 const clean = line.trim();
                 if (clean.startsWith('--')) return;
@@ -38,20 +39,21 @@ export default class SecurityAnalyzer implements IFeature {
                     }
                 }
 
-                const globalMatch = line.match(/^local\s+([A-Z][A-Za-z0-9_]*)\s*=\s*\{/);
+                const globalMatch = line.match(/^local\s+([A-Z][A-Za-z0-9_]*)\s*=s*\{/);
                 if (globalMatch) {
                     const varName = globalMatch[1];
                     const isConstant = /^[A-Z0-9_]+$/.test(varName);
-                    const isModuleDef = varName === fileNameNoExt;
-                    const isSafeSuffix = varName.endsWith('Service') || varName.endsWith('Controller') || varName.endsWith('Component') || varName.endsWith('Page');
-                    const whitelist = ['Components', 'Props', 'State', 'Actions'];
+                    
+                    const isReturnedModule = returnedModuleVar === varName;
+                    const isSafeSuffix = varName.endsWith('Service') || varName.endsWith('Controller') || varName.endsWith('Component') || varName.endsWith('Page') || varName.endsWith('Interface');
+                    const whitelist = ['Components', 'Props', 'State', 'Actions', 'Config', 'Manifest'];
                     const isWhitelisted = whitelist.includes(varName);
 
-                    if (!isConstant && !isModuleDef && !isSafeSuffix && !isWhitelisted) {
+                    if (!isConstant && !isReturnedModule && !isSafeSuffix && !isWhitelisted) {
                         issues.push({
                             type: 'WARNING',
                             title: 'Potential Global Mutable State',
-                            message: `Top-level table '${varName}' detected. If this stores state, it will persist. Ensure it is stateless or a Constant.`,
+                            message: `Top-level table '${varName}' detected. If this is a Service/Controller container, ensure it is returned at the end of the file. If it stores state, move it to 'self' or 'Init'.`,
                             file: file,
                             line: idx + 1,
                             snippet: clean,
@@ -63,12 +65,11 @@ export default class SecurityAnalyzer implements IFeature {
         }
 
         let md = '### 🛡️ Security Analysis Results\n\n';
-        if (issues.length === 0) {
-            md += '✅ **CLEAN: No Security Vulnerabilities Found.**\n\n';
-            md += '> **👮‍♂️ ENFORCEMENT NOTE:**\n';
-            md += '> - **No Polling:** Never use `while wait()` loops. They destroy server performance.\n';
-            md += '> - **No Global State:** Do not define mutable tables at the top level. Use `Init/Start` or `Context` to store state.\n';
-        }
+        if (issues.length === 0) md += '✅ **CLEAN: No Security Vulnerabilities Found.**\n\n';
+        
+        md += '\n> **👮‍♂️ OVHL LAW: SECURITY**\n';
+        md += '> *   **No Polling:** Never use `while wait()` loops. They destroy server performance.\n';
+        md += '> *   **No Global State:** Do not define mutable tables at the top level. Use `Init/Start` or `Context` to store state.\n';
         
         ctx.addSection(this.id, '🛡️ Security Sweep', md, issues);
     }

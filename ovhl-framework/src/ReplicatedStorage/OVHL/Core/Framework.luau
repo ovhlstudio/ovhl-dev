@@ -5,10 +5,10 @@ local RS = game:GetService("ReplicatedStorage")
 
 -- Internal Dependencies
 local Loader = require(RS.OVHL.Core.Loader)
-local SmartLogger = Loader.Core("SmartLogger")
-local ActionGuard = Loader.UI.Foundation.ActionGuard
-local Bridge = Loader.Core.Networking.Bridge
-local Trove = Loader.Pkg("Trove") -- [NEW] Load Trove di Pusat
+local SmartLogger = Loader.Get("Logger")
+local ActionGuard = Loader.Get("ActionGuard")
+local Bridge = Loader.Get("Bridge")
+local Trove = Loader.Get("Trove") -- [NEW] Load Trove di Pusat
 
 local Framework = {}
 
@@ -29,13 +29,15 @@ function Framework.CreateController(def)
 
 		-- [STRATEGY A] Cek di Module Feature (Inventory, Shop)
 		local successA, resA = pcall(function()
-			return Loader.Module(ctrl.ConfigName).SharedConfig
+			-- [FIXED] Tambahkan require() di sini!
+			return require(Loader.Module(ctrl.ConfigName).SharedConfig)
 		end)
 		if successA and resA then
 			loadedConfig = resA
 			loadSource = "Module"
 		else
 			-- [STRATEGY B] Cek di Global Config Folder (SystemPanelConfig)
+			-- Note: Loader.Config sudah otomatis require di dalam Proxy-nya, jadi ini aman.
 			local successB, resB = pcall(function()
 				return Loader.Config(ctrl.ConfigName)
 			end)

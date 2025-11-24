@@ -18,7 +18,7 @@ task.defer(function()
 	local TesEZ
 
 	pcall(function()
-		TesEZ = Loader.Pkg("TestEZ")
+		TesEZ = Loader.Get("TestEZ")
 	end)
 
 	if not TesEZ then

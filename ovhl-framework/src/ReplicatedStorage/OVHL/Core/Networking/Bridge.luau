@@ -6,7 +6,7 @@ local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Loader = require(ReplicatedStorage.OVHL.Core.Loader)
-local Promise = Loader.Pkg("Promise")
+local Promise = Loader.Get("Promise")
 
 local Bridge = {}
 Bridge.__index = Bridge
@@ -17,7 +17,7 @@ local IS_SERVER = RunService:IsServer()
 local Guard, TypeValidator
 if IS_SERVER then
 	Guard = require(ServerScriptService.OVHL.Core.NetworkGuard)
-	TypeValidator = Loader.Core("TypeValidator")
+	TypeValidator = Loader.Get("TypeValidator")
 end
 
 function Bridge.New(ctx)

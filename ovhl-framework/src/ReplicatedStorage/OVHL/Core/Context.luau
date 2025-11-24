@@ -3,9 +3,9 @@
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
 
 -- [MIGRATION] Use Dot Syntax Internally
-local SmartLogger = Loader.Core.SmartLogger
-local Signals = Loader.Core.Signals
-local Manifest = Loader.Core.Manifest 
+local SmartLogger = Loader.Get("Logger")
+local Signals = Loader.Get("Signals")
+local Manifest = Loader.Get("Manifest") 
 
 local Context = {}
 Context.__index = Context

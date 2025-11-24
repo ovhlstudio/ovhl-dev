@@ -18,31 +18,27 @@ export default class UIAnalyzer implements IFeature {
         let onyxCount = 0;
 
         for (const file of files) {
-            const fullPath = path.join(root, file);
-            const content = await fs.readFile(fullPath, 'utf-8');
+            const content = await fs.readFile(path.join(root, file), 'utf-8');
             const lines = content.split('\n');
-            
             if (content.includes('Fusion')) fusionCount++;
             if (content.includes('onyx-ui') || content.includes('Onyx')) onyxCount++;
 
             lines.forEach((line, idx) => {
                 const clean = line.trim();
                 if (clean.startsWith('--')) return;
-
                 const vanillaMatch = clean.match(/Instance\.new\s*\(\s*["'](Frame|TextLabel|TextButton|ImageLabel|ImageButton|ScrollingFrame|CanvasGroup|UIListLayout)["']/);
                 
                 if (vanillaMatch) {
                     issues.push({
                         type: 'WARNING',
                         title: 'Vanilla UI Detected (Anti-Pattern)',
-                        message: 'Found `Instance.new("' + vanillaMatch[1] + '")`. Use **Fusion.New** or **Onyx Components** for declarative UI.',
+                        message: 'Found `Instance.new("' + vanillaMatch[1] + '")`. Use **Fusion.New** or **Onyx Components**.',
                         file: file,
                         line: idx + 1,
                         snippet: clean,
                         penalty: 5
                     });
                 }
-
                 if (clean.includes('Color3.fromRGB') || clean.includes('Color3.new')) {
                     if (!file.includes('Theme') && !file.includes('Config')) {
                          issues.push({
@@ -62,13 +58,11 @@ export default class UIAnalyzer implements IFeature {
         let md = '### 🎨 UI Tech Stack Overview\n\n';
         md += `- **Fusion Usage:** ${fusionCount} files\n`;
         md += `- **Onyx Usage:** ${onyxCount} files\n\n`;
-        
-        if (issues.length === 0) {
-            md += '✅ **CLEAN: Modern UI Architecture detected.**\n\n';
-            md += '> **👮‍♂️ ENFORCEMENT NOTE:**\n';
-            md += '> - **No Vanilla UI:** Do not use `Instance.new` for UI elements. Use Fusion/Onyx.\n';
-            md += '> - **Theming:** Always use `API.Theme` tokens, never raw `Color3`.\n';
-        }
+        if (issues.length === 0) md += '✅ **CLEAN: Modern UI Architecture detected.**\n\n';
+
+        md += '> **👮‍♂️ OVHL LAW: UI SYSTEM**\n';
+        md += '> *   **Declarative Only:** Use Fusion/Onyx. Vanilla `Instance.new` is messy.\n';
+        md += '> *   **Theme First:** Use `API.Theme` tokens. Raw colors break Dark Mode support.\n';
 
         ctx.addSection(this.id, '🎨 UI System', md, issues);
     }

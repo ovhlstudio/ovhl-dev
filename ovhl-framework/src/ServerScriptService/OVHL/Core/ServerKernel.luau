@@ -3,9 +3,9 @@
 local ServerScriptService = game:GetService("ServerScriptService")
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
 
-local Context = Loader.Core("Context")
-local SmartLogger = Loader.Core("SmartLogger")
-local Manifest = Loader.Core("Manifest")
+local Context = Loader.Get("Context")
+local SmartLogger = Loader.Get("Logger")
+local Manifest = Loader.Get("Manifest")
 -- Loader will automatically resolve "Networking/Bridge" to Bridge.luau
 local Bridge = Loader.Server("Core/NetworkBridge")
 
