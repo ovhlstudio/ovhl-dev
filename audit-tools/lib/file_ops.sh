@@ -3,12 +3,10 @@
 # Add Line Numbers Style (0001 | code)
 add_line_numbers() {
     local file=$1
-    # Fallback if nl not available, simple cat -n
     nl -ba -w4 -s" | " "$file" 2>/dev/null || cat -n "$file"
 }
 
-# Smart Truncate (RESTORED from V1)
-# Shows Head 60% + Tail 40% if file > MAX lines
+# Smart Truncate
 smart_dump_file() {
     local file=$1
     local rel_path=$2
@@ -25,7 +23,6 @@ smart_dump_file() {
     if [ $total_lines -le $MAX_FILE_LINES ]; then
         add_line_numbers "$file"
     else
-        # Calculate splits
         local first_part=$((MAX_FILE_LINES * 6 / 10))
         local last_part=$((MAX_FILE_LINES * 4 / 10))
         local hidden=$((total_lines - first_part - last_part))
@@ -39,15 +36,18 @@ smart_dump_file() {
     echo "</details>"
 }
 
+# Improved Tree Generation (Extension Aware & Strict Path)
 generate_tree() {
     local dir=$1
     echo "\`\`\`"
     echo "📦 $(basename "$dir")/"
+    
     find "$dir" -print | sort | while read -r path; do
         if [ "$path" = "$dir" ]; then continue; fi
         
         local name=$(basename "$path")
-        # Apply Exclusion
+        
+        # Apply Global Exclusion
         if check_exclusion "$name"; then continue; fi
 
         # Visual Indent
@@ -58,7 +58,12 @@ generate_tree() {
         if [ -d "$path" ]; then
             echo "$indent├── 📁 $name/"
         else
-            echo "$indent├── 🌙 $name"
+            # Icon logic
+            if [[ "$name" == *.lua || "$name" == *.luau ]]; then
+                echo "$indent├── 🌙 $name"
+            else
+                echo "$indent├── 📄 $name"
+            fi
         fi
     done
     echo "\`\`\`"

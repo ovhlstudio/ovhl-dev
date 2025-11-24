@@ -1,4 +1,4 @@
-name = "OVHL_Enterprise"
+
 std = "roblox"
 
 # [CRITICAL] Jangan linting file definisi tipe

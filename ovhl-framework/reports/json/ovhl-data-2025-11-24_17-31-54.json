@@ -1,0 +1,102 @@
+{
+  "rootPath": "E:\\OMNIVERSE-DEV\\ovhl-framework",
+  "config": {
+    "project": {
+      "targetPath": "../ovhl-framework",
+      "rojoFile": "default.project.json"
+    },
+    "aiContext": {
+      "lifecycle": "Init(ctx) -> Start()",
+      "architecture": [
+        "Singleton Service/Controller",
+        "No wait()",
+        "No script.Parent.Parent"
+      ],
+      "testing": "TestEZ Mandatory"
+    },
+    "reporting": {
+      "outputDir": "./reports",
+      "timestampFormat": "YYYY-MM-DD_HH-mm-ss",
+      "maxHistory": 5,
+      "naming": {
+        "markdown": "ovhl-snapshot-{TIMESTAMP}",
+        "json": "ovhl-data-{TIMESTAMP}"
+      },
+      "layout": [
+        "01_Structure",
+        "06_Telemetry",
+        "03_Security",
+        "08_Reusability",
+        "02_Dependencies",
+        "04_CodeQuality",
+        "07_BreakingChanges",
+        "99_Snapshot"
+      ]
+    },
+    "audit": {
+      "ignore": [
+        "**/Packages/**",
+        "**/_Index/**"
+      ],
+      "maxSnapshotLines": 1000
+    },
+    "penalties": {
+      "raceCondition": 20,
+      "globalState": 5,
+      "missingTelemetry": 10
+    }
+  },
+  "timestamp": "2025-11-24T10:31:53.890Z",
+  "results": [
+    {
+      "id": "02_Dependencies",
+      "title": "🔗 Dependencies",
+      "content": "### 📦 External Packages (Wally)\n\n| Package | Status | Refs |\n|---|---|---|\n| **TestEZ** | ✅ Active | 2 refs |\n| **Fusion** | ✅ Active | 7 refs |\n| **topbarplus** | ✅ Active | 1 refs |\n| **onyx-ui** | ✅ Active | 2 refs |\n| **Promise** | ✅ Active | 1 refs |\n| **Signal** | ✅ Active | 1 refs |\n| **profileservice** | ✅ Active | 1 refs |\n| **Option** | ⚠️ Unused | 0 refs |\n| **Trove** | ✅ Active | 3 refs |\n\n### 🕷️ Module Coupling\n- **Core Dependency:** 19 files depend heavily on `Loader.Core` frameworks.\n",
+      "issues": [],
+      "duration": 20
+    },
+    {
+      "id": "06_Telemetry",
+      "title": "📡 Telemetry",
+      "content": "### 📡 Active Telemetry Domains\n\n| Module | Domain |\n|---|---|\n| `NetworkBridge.luau` | **SECURITY** |\n| `NetworkGuard.luau` | **SECURITY** |\n| `ServerKernel.luau` | **SYSTEM** |\n| `DataManagerService.luau` | **DATA** |\n| `MonetizationService.luau` | **SHOP** |\n| `PermissionService.luau` | **PERMISSION** |\n| `Bridge.luau` | **SECURITY** |\n| `SafeLoader.luau` | **USER_INTERFACE** |\n| `ClientKernel.luau` | **SYSTEM** |\n| `InventoryService.luau` | **INVENTORY** |\n| `Topbar.lua` | **TOPBAR** |\n| `AsyncButton.luau` | **UX** |\n| `SmartButton.luau` | **UX** |\n| `Window.luau` | **UI_LAYOUT** |\n",
+      "issues": [
+        {
+          "type": "CRITICAL",
+          "title": "Blind Logic (Missing Logger)",
+          "message": "This file controls logic but has NO EYES. AI cannot debug it. Inject 'SmartLogger' immediately.",
+          "file": "src/StarterPlayer/StarterPlayerScripts/OVHL/Core/FinderService.luau",
+          "penalty": 10
+        },
+        {
+          "type": "CRITICAL",
+          "title": "Blind Logic (Missing Logger)",
+          "message": "This file controls logic but has NO EYES. AI cannot debug it. Inject 'SmartLogger' immediately.",
+          "file": "src/ReplicatedStorage/OVHL/UI/Views/Inventory/InventoryView.luau",
+          "penalty": 10
+        },
+        {
+          "type": "CRITICAL",
+          "title": "Blind Logic (Missing Logger)",
+          "message": "This file controls logic but has NO EYES. AI cannot debug it. Inject 'SmartLogger' immediately.",
+          "file": "src/ReplicatedStorage/OVHL/UI/Views/Shop/ShopView.luau",
+          "penalty": 10
+        },
+        {
+          "type": "CRITICAL",
+          "title": "Blind Logic (Missing Logger)",
+          "message": "This file controls logic but has NO EYES. AI cannot debug it. Inject 'SmartLogger' immediately.",
+          "file": "src/ReplicatedStorage/OVHL/UI/Views/System/FrameworkPanelView.luau",
+          "penalty": 10
+        }
+      ],
+      "duration": 10
+    }
+  ],
+  "globalScore": 60,
+  "metadata": {
+    "duration": "0.03s",
+    "command": "ovhl audit",
+    "version": "0.1.0",
+    "rojoMapping": "| Source Folder (Disk) | Roblox Service (Virtual) |\n|---|---|\n| `src/ReplicatedStorage/OVHL` | `game.ReplicatedStorage.OVHL` |\n| `Packages` | `game.ReplicatedStorage.Packages` |\n| `tests/ReplicatedStorage` | `game.ReplicatedStorage.Tests` |\n| `src/ServerScriptService/OVHL` | `game.ServerScriptService.OVHL` |\n| `tests/ServerScriptService` | `game.ServerScriptService.Tests` |\n| `src/StarterPlayer/StarterPlayerScripts/OVHL` | `game.StarterPlayer.StarterPlayerScripts.OVHL` |\n| `tests/StarterPlayer/StarterPlayerScripts` | `game.StarterPlayer.StarterPlayerScripts.Tests` |\n"
+  }
+}
