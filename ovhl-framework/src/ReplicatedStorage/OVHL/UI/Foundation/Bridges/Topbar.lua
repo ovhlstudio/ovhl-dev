@@ -2,11 +2,11 @@
 local RS = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local Loader = require(RS.OVHL.Core.Loader)
-local SmartLogger = Loader.Core("SmartLogger")
+local SmartLogger = Loader.Get("Logger")
 
 local TopbarPlus = Loader.Pkg("topbarplus")
-local Fusion = Loader.Pkg("Fusion")
-local API = Loader.UI("Foundation/API")
+local Fusion = Loader.Get("Fusion")
+local API = Loader.Get("API")
 
 local TopbarBridge = {}
 local _initialized = false

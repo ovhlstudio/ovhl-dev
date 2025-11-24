@@ -1,7 +1,7 @@
 --!strict
 -- @Foundation: Motion (Scope Safe)
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
-local Fusion = Loader.Pkg("Fusion")
+local Fusion = Loader.Get("Fusion")
 
 local Motion = {}
 

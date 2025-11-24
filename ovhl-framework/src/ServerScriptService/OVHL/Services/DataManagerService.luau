@@ -5,8 +5,8 @@ local RS = game:GetService("ReplicatedStorage")
 local SS = game:GetService("ServerScriptService")
 
 local Loader = require(RS.OVHL.Core.Loader)
-local ProfileService = Loader.Pkg("ProfileService")
-local Env = Loader.Core.Env
+local ProfileService = Loader.Get("ProfileService")
+local Env = Loader.Get("Env")
 local DataMigrator = require(SS.OVHL.Core.DataMigrator)
 
 local DataManager = {}

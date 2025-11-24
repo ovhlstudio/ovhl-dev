@@ -2,15 +2,15 @@
 -- @UI: API (Motion System Integrated)
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
 
-local Fusion = Loader.Pkg("Fusion")
-local Onyx = Loader.Pkg("onyx-ui")
+local Fusion = Loader.Get("Fusion")
+local Onyx = Loader.Get("Onyx")
 
-local Assets = Loader.UI.Foundation.Assets
-local Motion = Loader.UI.Foundation.Motion
-local MotionPresets = Loader.UI.Foundation.MotionPresets
-local Theme = Loader.UI.Foundation.OVHLTheme
-local Util = Loader.UI.Foundation.Util
-local SafeLoader = Loader.UI.Foundation.SafeLoader
+local Assets = Loader.Get("Assets")
+local Motion = Loader.Get("Motion")
+local MotionPresets = Loader.Get("MotionPresets")
+local Theme = Loader.Get("Theme")
+local Util = Loader.Get("Util")
+local SafeLoader = Loader.Get("SafeLoader")
 
 local API = {}
 

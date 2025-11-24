@@ -1,7 +1,7 @@
 --!strict
 -- @Component: Player Inspector Deck (Fixed: Solid Interaction & Dark Theme)
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
-local UI = Loader.UI.Foundation.API
+local UI = Loader.Get("API")
 local Children = UI.Children
 local Fusion = UI.Fusion
 

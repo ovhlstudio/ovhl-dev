@@ -1,132 +1,191 @@
 --!strict
--- @Core: Loader v2.2 (Recursive Legacy Support)
+-- @Core: Loader v5.2 (Stable & Forgiving)
+-- @Role: Central Dependency Registry
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local RunService = game:GetService("RunService")
 
 local Loader = {}
 
--- Root References
-local ROOTS = {
-	Core = ReplicatedStorage:WaitForChild("OVHL"):WaitForChild("Core"),
-	Config = ReplicatedStorage.OVHL:WaitForChild("Config"),
-	UI = ReplicatedStorage.OVHL:WaitForChild("UI"),
-	SharedModules = ReplicatedStorage.OVHL:WaitForChild("Modules"),
-	Packages = ReplicatedStorage:WaitForChild("Packages")
-}
-
--- Helper: Listing Available Files
-local function getAvailable(instance: Instance)
-    local list = {}
-    for _, c in ipairs(instance:GetChildren()) do table.insert(list, c.Name) end
-    return table.concat(list, ", ")
+-- [0] DEBUGGER
+local DEBUG_MODE = RunService:IsStudio()
+local function log(msg: string, level: string?)
+	if not DEBUG_MODE then
+		return
+	end
+	local prefix = "[OVHL-LOADER]"
+	if level == "ERROR" then
+		warn(string.format("🔴 %s %s", prefix, msg))
+	elseif level == "WARN" then
+		warn(string.format("⚠️ %s %s", prefix, msg))
+	else
+		print(string.format("🔍 %s %s", prefix, msg))
+	end
 end
 
--- [[ HELPER: PROXY GENERATOR ]]
-local function createProxy(rootInstance: Instance, pathHistory: string)
-	local proxy = newproxy(true)
-	local meta = getmetatable(proxy)
+-- [1] ROOT REFERENCES
+local ROOTS = {
+	OVHL = ReplicatedStorage:WaitForChild("OVHL"),
+	Packages = ReplicatedStorage:WaitForChild("Packages"),
+}
 
-	-- 1. DOT SYNTAX HANDLER (Modern)
-	meta.__index = function(_, key)
-		local currentPath = pathHistory .. "." .. key
-		local child = rootInstance:FindFirstChild(key)
+-- [HELPER] Wally Package Finder (Fixed)
+local function findPkg(pkgName: string)
+	local exact = ROOTS.Packages:FindFirstChild(pkgName)
+	if exact then
+		return exact
+	end
 
-		-- Smart Package Resolution
-		if not child and rootInstance == ROOTS.Packages then
-			local lowerKey = key:lower()
-			for _, c in ipairs(rootInstance:GetChildren()) do
-				if c.Name:lower() == lowerKey or c.Name:find("_" .. lowerKey .. "@") then
-					child = c
-					break
-				end
-			end
-		end
-
-		if not child then
-			error(string.format(
-                "[Loader] ❌ Path Error: '%s' not found in %s.\n   Available: %s", 
-                key, rootInstance.Name, getAvailable(rootInstance)
-            ))
-		end
-
-		if child:IsA("ModuleScript") then
-			return require(child)
-		elseif child:IsA("Folder") then
-			return createProxy(child, currentPath)
-		else
+	local lowerName = pkgName:lower()
+	for _, child in ipairs(ROOTS.Packages:GetChildren()) do
+		local cName = child.Name:lower()
+		if
+			cName:find("_" .. lowerName .. "@", 1, true)
+			or cName:find("^" .. lowerName .. "@")
+			or cName:find(lowerName, 1, true)
+		then
 			return child
 		end
 	end
+	return nil
+end
 
-	-- 2. CALL SYNTAX HANDLER (Legacy Recursive Fix)
-    -- Menangani: Loader.Core("Networking/Bridge")
-	meta.__call = function(_, pathString: string)
-        local current = rootInstance
-        
-        -- [FIX] Split string by "/" untuk menelusuri folder
-        for _, segment in ipairs(string.split(pathString, "/")) do
-            local nextObj = current:FindFirstChild(segment)
-            
-            -- Fallback check untuk Packages (Wally renaming)
-            if not nextObj and current == ROOTS.Packages then
-                local lower = segment:lower()
-                for _, c in ipairs(current:GetChildren()) do
-                    if c.Name:lower() == lower or c.Name:find("_" .. lower .. "@") then
-                        nextObj = c; break
-                    end
-                end
-            end
-            
-            if not nextObj then
-                error(string.format("[Loader] Legacy Path Error: Segment '%s' not found in '%s'. Path: %s", segment, current.Name, pathString))
-            end
-            
-            current = nextObj
-        end
-        
-        if current:IsA("ModuleScript") then
-		    return require(current)
-        else
-            return current -- Return instance/folder
-        end
+-- [2] ALIAS REGISTRY
+local ALIAS_MAP = {
+	-- CORE
+	["Framework"] = ROOTS.OVHL.Core.Framework,
+	["Context"] = ROOTS.OVHL.Core.Context,
+	["Logger"] = ROOTS.OVHL.Core.SmartLogger,
+	["Bridge"] = ROOTS.OVHL.Core.Networking.Bridge,
+	["Enums"] = ROOTS.OVHL.Core.Networking.NetworkEnums,
+	["Middleware"] = ROOTS.OVHL.Core.Networking.Middleware,
+	["Signals"] = ROOTS.OVHL.Core.Signals,
+	["Constants"] = ROOTS.OVHL.Core.Constants,
+	["Manifest"] = ROOTS.OVHL.Core.Manifest,
+	["Env"] = ROOTS.OVHL.Core.Env,
+	["Schema"] = ROOTS.OVHL.Core.ConfigSchema,
+	["ConfigLoader"] = ROOTS.OVHL.Core.SharedConfigLoader,
+	["TypeValidator"] = ROOTS.OVHL.Core.TypeValidator,
+
+	-- UI
+	["API"] = ROOTS.OVHL.UI.Foundation.API,
+	["Theme"] = ROOTS.OVHL.UI.Foundation.OVHLTheme,
+	["Assets"] = ROOTS.OVHL.UI.Foundation.Assets,
+	["ActionGuard"] = ROOTS.OVHL.UI.Foundation.ActionGuard,
+	["SafeLoader"] = ROOTS.OVHL.UI.Foundation.SafeLoader,
+	["Util"] = ROOTS.OVHL.UI.Foundation.Util,
+	["Motion"] = ROOTS.OVHL.UI.Foundation.Motion,
+	["MotionPresets"] = ROOTS.OVHL.UI.Foundation.MotionPresets,
+	["Topbar"] = ROOTS.OVHL.UI.Foundation.Bridges.Topbar,
+
+	-- PACKAGES
+	["Onyx"] = findPkg("onyx-ui"),
+	["TestEZ"] = findPkg("TestEZ"),
+	["Fusion"] = findPkg("Fusion"),
+	["Trove"] = findPkg("Trove"),
+	["Promise"] = findPkg("Promise"),
+	["Signal"] = findPkg("Signal"),
+	["ProfileService"] = findPkg("ProfileService"),
+}
+
+-- [3] FUZZY SEARCH
+local function getDidYouMean(badName: string, validNames: { string })
+	local bestMatch = nil
+	local bestScore = 999
+	for _, name in ipairs(validNames) do
+		local score = math.abs(#name - #badName)
+		if name:lower():match(badName:lower()) then
+			score = score - 2
+		end
+		if score < 3 and score < bestScore then
+			bestScore = score
+			bestMatch = name
+		end
 	end
-    
-    meta.__tostring = function() return "LoaderProxy[" .. rootInstance.Name .. "]" end
-
-	return proxy
+	return bestMatch
 end
 
--- [[ EXPORTS ]]
-Loader.Core = createProxy(ROOTS.Core, "Core")
-Loader.Config = createProxy(ROOTS.Config, "Config")
-Loader.Pkg = createProxy(ROOTS.Packages, "Packages")
-Loader.UI = createProxy(ROOTS.UI, "UI")
+-- [4] PUBLIC API
+function Loader.Get(aliasName: string)
+	local target = ALIAS_MAP[aliasName]
+	if target then
+		return require(target)
+	end
 
--- Feature Loader
-Loader.Module = function(featureName: string, subModule: string?)
-	local folder = ROOTS.SharedModules:FindFirstChild(featureName)
-	if not folder then error("Feature not found: " .. featureName) end
-	
-    -- Legacy Support
-    if subModule then
-        local sub = folder:FindFirstChild(subModule)
-        if not sub then error("SubModule '"..subModule.."' not found in " .. featureName) end
-        return require(sub)
-    end
-    
-    -- New Support
-	return createProxy(folder, "Module." .. featureName)
+	log("Alias '" .. aliasName .. "' not in Registry. Hunting in Packages...", "WARN")
+	local pkg = findPkg(aliasName)
+	if pkg then
+		log("✅ Auto-detected Package: " .. pkg.Name)
+		return require(pkg)
+	end
+
+	local keys = {}
+	for k in pairs(ALIAS_MAP) do
+		table.insert(keys, k)
+	end
+	local suggestion = getDidYouMean(aliasName, keys)
+	local msg = string.format("\n🛑 [OVHL-LOADER] Fatal Error: Module '%s' not found!", aliasName)
+	if suggestion then
+		msg = msg .. string.format("\n💡 Did you mean: '%s'?", suggestion)
+	end
+	log("❌ " .. msg, "ERROR")
+	error(msg, 2)
 end
 
--- Server Loader
+-- [5] LEGACY & COMPATIBILITY
+local function createFolderProxy(folder)
+	return setmetatable({}, {
+		__index = function(_, key)
+			local target = folder:FindFirstChild(key)
+			if not target then
+				error("❌ '" .. key .. "' not found in " .. folder.Name)
+			end
+			if target:IsA("ModuleScript") then
+				return require(target)
+			end
+			return createFolderProxy(target)
+		end,
+		__call = function(_, pathStr)
+			local current = folder
+			for _, seg in ipairs(string.split(pathStr, "/")) do
+				current = current:FindFirstChild(seg)
+				if not current then
+					error("Path '" .. seg .. "' missing in " .. folder.Name)
+				end
+			end
+			return if current:IsA("ModuleScript") then require(current) else current
+		end,
+	})
+end
+
+Loader.UI = createFolderProxy(ROOTS.OVHL.UI)
+Loader.Config = createFolderProxy(ROOTS.OVHL.Config)
+Loader.Module = function(featureName)
+	return ROOTS.OVHL.Modules:FindFirstChild(featureName) or error("Module not found")
+end
+
+-- [SAFETY NET] Biar kode lama yang lolos refactor gak crash
+Loader.Pkg = setmetatable({}, {
+	__call = function(_, name)
+		if name == "onyx-ui" then
+			return Loader.Get("Onyx")
+		end
+		return Loader.Get(name)
+	end,
+})
+
 if RunService:IsServer() then
 	local ServerRoot = ServerScriptService:WaitForChild("OVHL")
-	Loader.Server = createProxy(ServerRoot, "Server")
-else
-    Loader.Server = setmetatable({}, {
-        __index = function() error("[Loader] Loader.Server cannot be used on Client!") end
-    })
+	Loader.Server = function(pathStr)
+		local current = ServerRoot
+		for _, seg in ipairs(string.split(pathStr, "/")) do
+			current = current:FindFirstChild(seg)
+			if not current then
+				error("Server Path '" .. pathStr .. "' not found")
+			end
+		end
+		return require(current)
+	end
 end
 
 return Loader

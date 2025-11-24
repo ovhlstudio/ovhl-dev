@@ -5,10 +5,10 @@ local Loader = require(RS.OVHL.Core.Loader)
 local OVHL = require(RS.OVHL.Core.Framework) -- Central Import
 
 -- Libs (View & Utils tetap manual)
-local Fusion = Loader.Pkg("Fusion")
-local Trove = Loader.Pkg("Trove")
-local UI = Loader.UI.Foundation.API
-local Topbar = Loader.UI.Foundation.Bridges.Topbar
+local Fusion = Loader.Get("Fusion")
+local Trove = Loader.Get("Trove")
+local UI = Loader.Get("API")
+local Topbar = Loader.Get("Topbar")
 local FrameworkPanelView = Loader.UI("Views/System/FrameworkPanelView")
 
 local Ctrl = OVHL.CreateController({
@@ -68,7 +68,7 @@ function Ctrl:Init()
     end)
 
     -- [GLOBAL SIGNAL]
-    Loader.Core("Signals"):Connect("SystemUI:RequestConfirm", function(payload)
+    Loader.Get("Signals"):Connect("SystemUI:RequestConfirm", function(payload)
         self:ShowConfirmationUI(payload)
     end)
 end

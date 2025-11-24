@@ -3,7 +3,7 @@
 -- Mencari dan memuat SharedConfig dari folder Modules
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
-local Schema = Loader.Core("ConfigSchema")
+local Schema = Loader.Get("Schema")
 
 local ConfigLoader = {}
 

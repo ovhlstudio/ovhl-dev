@@ -1,7 +1,7 @@
 --!strict
 -- @View: FrameworkPanelView (Cleaned - No More Inspector Popup)
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
-local UI = Loader.UI.Foundation.API
+local UI = Loader.Get("API")
 local Children = UI.Children
 
 local PermissionPage = Loader.UI("Views/System/Pages/PermissionPage")
