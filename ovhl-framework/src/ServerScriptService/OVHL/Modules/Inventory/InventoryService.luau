@@ -1,9 +1,15 @@
 --!strict
--- @Service: InventoryService (REFACTORED: Scoped Data)
-local RS = game:GetService("ReplicatedStorage")
-local Loader = require(RS.OVHL.Core.Loader)
+-- @Service: InventoryService v0.2.0 (Secured)
+-- @Role: Inventory Logic with Mutex & DataStore
+-- @Mandate: Mandat 5 (Data Integrity)
 
--- [FIX] Tambahkan require() disini!
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Loader = require(ReplicatedStorage.OVHL.Core.Loader)
+local SessionMutex = require(ServerScriptService.OVHL.Core.SessionMutex)
+
+-- Load Config
 local Cfg = require(Loader.Module("Inventory").SharedConfig)
 
 local Hub = {}
@@ -12,70 +18,115 @@ function Hub:Init(ctx)
 	self.Logger = ctx:CreateLogger("INVENTORY")
 	self.Network = ctx.Network
 
-	-- [FIX] Move Data from Global to Instance
-	self._mockStorage = {
-		{ Id = 1, Name = "Excalibur", Rarity = "Epic", Count = 1, Icon = "rbxassetid://13006407439", Equipped = false },
-		{
-			Id = 2,
-			Name = "Health Potion",
-			Rarity = "Common",
-			Count = 5,
-			Icon = "rbxassetid://12905487363",
-			Equipped = false,
-		},
-		{ Id = 3, Name = "Mana Crystal", Rarity = "Rare", Count = 2, Icon = "", Equipped = false },
-		{ Id = 4, Name = "God Apple", Rarity = "Legendary", Count = 1, Icon = "", Equipped = false },
-		{
-			Id = 5,
-			Name = "Rusty Dagger",
-			Rarity = "Common",
-			Count = 1,
-			Icon = "rbxassetid://13006407439",
-			Equipped = false,
-		},
-	}
+	-- Dependency ke DataManager (Pastikan DataManagerService sudah di-load Kernel)
+	-- Kita akses via Context Services
+	self.DataManager = ctx.Services.DataManagerService
 
-	-- Sekarang Cfg.Network ada isinya, jadi Remote bakal dibuat!
+	if not self.DataManager then
+		self.Logger:Error("Dependency", "DataManagerService Not Found!")
+	end
+
+	-- Register Routes
 	self.Network:Register("Inventory", Cfg.Network)
 	self.Network:Bind("Inventory", self)
 
-	self.Logger:Info("System", "Inventory Active (Mock Storage)")
+	self.Logger:Info("System", "Inventory Logic Online (Secured)")
 end
 
-function Hub:Start() end
+function Hub:Start()
+	-- Event Listeners if needed
+end
+
+-- [[ HELPER ]]
+function Hub:_getInv(player)
+	if not self.DataManager then
+		return nil
+	end
+	local data = self.DataManager:Get(player)
+	if not data then
+		return nil
+	end
+
+	-- Pastikan tabel Inventory ada
+	if not data.Inventory then
+		data.Inventory = {}
+	end
+	return data.Inventory
+end
+
+-- [[ API METHODS ]]
 
 function Hub:GetItems(player)
-	-- Simulated fetch per player
-	self.Logger:Debug("Data", { User = player.Name, Op = "Fetch" })
-	return { Success = true, Data = self._mockStorage }
+	local inv = self:_getInv(player)
+	if not inv then
+		return { Success = false, Error = "Data not ready" }
+	end
+
+	-- [DEBUG ONLY] Jika inventory kosong, kasih starter pack (untuk tes v0.2.0)
+	if #inv == 0 then
+		table.insert(
+			inv,
+			{ Id = 1, Name = "Starter Sword", Rarity = "Common", Equipped = false, Icon = "rbxassetid://13006407439" }
+		)
+		table.insert(
+			inv,
+			{ Id = 2, Name = "Apple", Rarity = "Common", Equipped = false, Icon = "rbxassetid://12905487363" }
+		)
+		self.Logger:Warn("Debug", "Gave Starter Items to " .. player.Name)
+	end
+
+	return { Success = true, Data = inv }
 end
 
 function Hub:PerformAction(player, itemId, action)
-	local targetItem, index
-	for i, v in ipairs(self._mockStorage) do
-		if v.Id == itemId then
-			targetItem = v
-			index = i
-			break
+	-- 1. MUTEX LOCK (Anti-Spam / Race Condition Guard)
+	local lockSuccess, lockResult = SessionMutex.Run(player.UserId, function()
+		-- A. Validasi Data
+		local inv = self:_getInv(player)
+		if not inv then
+			error("Inventory data unavailable")
 		end
-	end
 
-	if not targetItem then
-		-- [FIX] Sanitized Error
-		return { Success = false, Error = "Item unavailable" }
-	end
+		local targetItem
+		for _, v in ipairs(inv) do
+			if v.Id == itemId then
+				targetItem = v
+				break
+			end
+		end
 
-	if action == "Equip" then
-		targetItem.Equipped = not targetItem.Equipped
-		self.Logger:Info("Action", { User = player.Name, Type = action, Item = targetItem.Name })
-		return { Success = true, Data = { Msg = targetItem.Equipped and "Equipped" or "Unequipped" } }
-	elseif action == "Drop" then
-		table.remove(self._mockStorage, index)
-		self.Logger:Info("Action", { User = player.Name, Type = action, Item = targetItem.Name })
-		return { Success = true, Data = { Msg = "Item dropped" } }
-	end
+		if not targetItem then
+			error("Item not found in inventory")
+		end
 
-	return { Success = false, Error = "Invalid Action" }
+		-- B. Logika Bisnis
+		if action == "Equip" then
+			targetItem.Equipped = not targetItem.Equipped
+			self.Logger:Info("Action", { User = player.Name, Type = action, Item = targetItem.Name })
+			return { Msg = targetItem.Equipped and "Equipped" or "Unequipped" }
+		elseif action == "Drop" then
+			-- Hapus item dari table (harus cari index lagi untuk safety)
+			for i, v in ipairs(inv) do
+				if v.Id == itemId then
+					table.remove(inv, i)
+					break
+				end
+			end
+			self.Logger:Info("Action", { User = player.Name, Type = action, Item = targetItem.Name })
+			return { Msg = "Item dropped" }
+		else
+			error("Unknown Action: " .. tostring(action))
+		end
+	end)
+
+	-- 2. RETURN RESULT
+	if lockSuccess then
+		return { Success = true, Data = lockResult }
+	else
+		-- Lock failed (Busy) atau Error di dalam logic
+		self.Logger:Warn("ActionFail", { User = player.Name, Err = lockResult })
+		return { Success = false, Error = tostring(lockResult) }
+	end
 end
 
 return Hub

@@ -1,34 +1,35 @@
+--!strict
 return function()
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
 	local Loader = require(ReplicatedStorage.OVHL.Core.Loader)
 	local Promise = Loader.Get("Promise")
 
 	-- Load Controller Asli
-	-- Catatan: Di Framework V4, CreateController mengembalikan table controller.
 	local InventoryCtrl = require(game.StarterPlayer.StarterPlayerScripts.OVHL.Modules.Inventory.InventoryController)
 
 	describe("InventoryController (Client Logic)", function()
-		-- [SETUP] Mocking Dependencies sebelum tes jalan
-		-- Kita pasang "Jebakan Batman" biar dia gak error nyari Server beneran
+		-- [SETUP] Mocking Dependencies
+		-- Update Mock Bridge agar sesuai dengan API v0.2.0
 		InventoryCtrl.Bridge = {
 			Request = function(self, service, method)
-				-- Pura-pura jadi Server yang ngebales sukses
 				if method == "GetItems" then
 					return Promise.resolve({ { Id = 1, Name = "MockSword" } })
 				end
 				return Promise.reject("Unknown Method")
 			end,
-			Listen = function() end, -- Mock Listen biar gak error
+
+			-- [FIX] Mocking method baru RequestWithRetry
+			-- Di test environment, kita tidak butuh delay/retry loop asli.
+			-- Kita cukup bypass langsung ke Request biasa agar tes cepat selesai.
+			RequestWithRetry = function(self, service, method, options, ...)
+				return self:Request(service, method, ...)
+			end,
+
+			Listen = function() end,
 		}
 
-		-- Mock Logger biar gak spam console
+		-- Mock Logger
 		InventoryCtrl.Logger = { Info = function() end, Warn = function() end }
-
-		-- Mock State (Fusion Value)
-		-- Kita asumsi Init sudah jalan atau kita inject state manual jika perlu
-		-- Tapi InventoryCtrl.Init meload UI, ini bisa error di test environment tanpa PlayerGui.
-		-- Skenario terbaik: Pisahkan Logic dari UI Mounting.
-		-- Tapi untuk sekarang, kita tes function yang aman aja.
 
 		it("should be a valid controller table", function()
 			expect(InventoryCtrl).to.be.ok()
@@ -36,9 +37,6 @@ return function()
 		end)
 
 		it("should fetch data and update state", function()
-			-- Kita tes fungsi FetchData langsung
-			-- Karena kita sudah Mock Bridge di atas, dia gak bakal error network.
-
 			-- Inject State Manual (Mocking Fusion State)
 			local mockStateVal = {}
 			InventoryCtrl.State = {
@@ -56,7 +54,7 @@ return function()
 			local success = p:awaitStatus()
 
 			expect(success).to.equal(Promise.Status.Resolved)
-			-- Cek apakah state berubah sesuai return dari Mock Bridge
+			-- Validasi hasil mock
 			expect(mockStateVal[1].Name).to.equal("MockSword")
 		end)
 	end)
