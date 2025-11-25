@@ -1,209 +1,163 @@
 --!strict
--- @Component: NetworkBridge (Shared v2.3 - Fixed Request Logic)
--- @Role: Traffic Controller & Security Checkpoint
+-- @Component: NetworkBridge (Client/Shared v0.2.2)
+-- @Role: Client Gateway & Packet Dispatcher
+-- @Mandate: Mandat 1 (Single Remote) & Retry Policy
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local ServerScriptService = game:GetService("ServerScriptService")
 
 local Loader = require(ReplicatedStorage.OVHL.Core.Loader)
 local Promise = Loader.Get("Promise")
+local Signal = Loader.Get("Signal")
+local Enums = Loader.Get("Enums")
 
 local Bridge = {}
 Bridge.__index = Bridge
 
-local IS_SERVER = RunService:IsServer()
+local GATEWAY_NAME = "OVHL_Gateway"
+local STREAM_NAME = "OVHL_Stream"
 
--- Lazy load Server modules
-local Guard, TypeValidator
-if IS_SERVER then
-	Guard = require(ServerScriptService.OVHL.Core.NetworkGuard)
-	TypeValidator = Loader.Get("TypeValidator")
-end
-
-function Bridge.New(ctx)
+function Bridge.New()
 	local self = setmetatable({
-		_root = nil,
+		_gateway = nil :: RemoteFunction?,
+		_stream = nil :: RemoteEvent?,
+		_signals = {} :: { [string]: any },
+		_isClient = RunService:IsClient(),
 	}, Bridge)
 
-	if IS_SERVER then
-		-- SERVER SIDE SETUP
-		local secLog = ctx:CreateLogger("SECURITY")
-		local netLog = ctx:CreateLogger("NETWORK")
-		self._logger = netLog
-		self._secLog = secLog
-		self._limit = ctx.RateLimiter
-
-		self._root = ReplicatedStorage:FindFirstChild("OVHL_Remotes") or Instance.new("Folder", ReplicatedStorage)
-		self._root.Name = "OVHL_Remotes"
-		self._services = {}
-
-		self._secLog:Info("System", "🛡️ Security Systems (Guard & Limiter) Connected")
-	else
-		-- CLIENT SIDE SETUP
-		-- Tunggu folder remotes (Max 20 detik)
-		self._root = ReplicatedStorage:WaitForChild("OVHL_Remotes", 20)
-		if not self._root then
-			warn("[Bridge] Critical: OVHL_Remotes folder not found after 20s!")
-		end
+	if self._isClient then
+		self:_initClient()
 	end
 
 	return self
 end
 
--- [[ SERVER API ]]
-function Bridge:Register(serviceName, netConfig)
-	if not IS_SERVER then
+function Bridge:_initClient()
+	local remotes = ReplicatedStorage:WaitForChild("OVHL_Remotes", 10)
+	if not remotes then
+		warn("⚠️ [Bridge] 'OVHL_Remotes' folder missing! Server might be lagging.")
 		return
 	end
 
-	local reqs = netConfig and netConfig.Requests or {}
-	for methodName, rules in pairs(reqs) do
-		-- NAMA REMOTE: Service_Method
-		local remoteName = serviceName .. "_" .. methodName
-		local rf = self._root:FindFirstChild(remoteName) or Instance.new("RemoteFunction", self._root)
-		rf.Name = remoteName
+	self._gateway = remotes:WaitForChild(GATEWAY_NAME, 10) :: RemoteFunction
+	self._stream = remotes:WaitForChild(STREAM_NAME, 10) :: RemoteEvent
 
-		local limitKey = serviceName .. ":" .. methodName
-		if rules.RateLimit and self._limit then
-			self._limit:SetRule(limitKey, rules.RateLimit.Max, rules.RateLimit.Interval)
-		end
-
-		rf.OnServerInvoke = function(player, ...)
-			return self:_handleInvoke(player, serviceName, methodName, rules, ...)
-		end
+	if self._stream then
+		self._stream.OnClientEvent:Connect(function(packet)
+			self:_dispatchLocal(packet)
+		end)
+	else
+		warn("⚠️ [Bridge] Remote Stream missing.")
 	end
-
-	local events = netConfig and netConfig.Events or {}
-	for _, eventName in ipairs(events) do
-		-- NAMA REMOTE: Service/Event
-		local remoteName = serviceName .. "/" .. eventName
-		local re = self._root:FindFirstChild(remoteName) or Instance.new("RemoteEvent", self._root)
-		re.Name = remoteName
-	end
-
-	return {
-		OnInvoke = function() end,
-		Fire = function(...) end,
-	}
 end
 
-function Bridge:_handleInvoke(player, serviceName, methodName, rules, ...)
-	-- A. Rate Limit
-	local limitKey = serviceName .. ":" .. methodName
-	if rules.RateLimit and self._limit and not self._limit:Check(player, limitKey) then
-		self._secLog:Warn("RateLimit", { Plr = player.Name, Action = methodName })
-		return { Success = false, Error = "Too Many Requests", Code = 429 }
-	end
-
-	-- B. Inbound Guard
-	local rawArgs = { ... }
-	local cleanArgs = {}
-	for i, v in ipairs(rawArgs) do
-		cleanArgs[i] = Guard.CleanIn(v, 0, player)
-	end
-
-	-- C. Type Validation
-	if rules.Args then
-		local ok, err = TypeValidator.Validate(cleanArgs, rules.Args)
-		if not ok then
-			return { Success = false, Error = "Invalid Arguments", Code = 400 }
-		end
-	end
-
-	-- D. Execution
-	local service = self._services[serviceName]
-	if service and service[methodName] then
-		local success, result = pcall(service[methodName], service, player, table.unpack(cleanArgs))
-		if not success then
-			return { Success = false, Error = "Internal Server Error" }
-		end
-
-		-- E. Outbound Guard
-		local sanitized = Guard.SanitizeOutbound(result)
-		if type(sanitized) == "table" and sanitized.Success ~= nil then
-			return sanitized
-		end
-		return { Success = true, Data = sanitized }
-	end
-
-	return { Success = false, Error = "Service Not Bound" }
-end
-
-function Bridge:Bind(name, srv)
-	self._services[name] = srv
-end
-
-function Bridge:Fire(player, serviceName, eventName, ...)
-	if not IS_SERVER then
+function Bridge:_dispatchLocal(packet)
+	if type(packet) ~= "table" then
 		return
 	end
-	local remoteName = serviceName .. "/" .. eventName
-	local re = self._root:FindFirstChild(remoteName)
-	if re then
-		re:FireClient(player, ...)
-	end
-end
-
-function Bridge:FireAll(serviceName, eventName, ...)
-	if not IS_SERVER then
+	if packet.T ~= Enums.Packet.EVENT then
 		return
 	end
-	local remoteName = serviceName .. "/" .. eventName
-	local re = self._root:FindFirstChild(remoteName)
-	if re then
-		re:FireAllClients(...)
+
+	local service = packet.S
+	local event = packet.E
+
+	if service and event then
+		local key = service .. "/" .. event
+		local sig = self._signals[key]
+		if sig then
+			if type(packet.D) == "table" then
+				sig:Fire(table.unpack(packet.D))
+			else
+				sig:Fire(packet.D)
+			end
+		end
 	end
 end
 
--- [[ CLIENT API ]]
--- [FIX] Parameter sekarang (serviceName, methodName, ...args)
-function Bridge:Request(serviceName, methodName, ...)
-	if IS_SERVER then
-		error("Request is Client-Only")
+-- [[ PUBLIC API ]]
+
+function Bridge:Request(serviceName: string, methodName: string, ...: any)
+	if not self._isClient then
+		error("Bridge:Request is Client-Only.")
 	end
+
 	local args = { ... }
 
 	return Promise.new(function(resolve, reject)
-		if not self._root then
-			return reject("Bridge not initialized")
+		if not self._gateway then
+			return reject("Bridge Gateway not connected")
 		end
 
-		-- [FIX] Target nama remote yang benar: Service_Method
-		local remoteName = serviceName .. "_" .. methodName
+		local packet = {
+			T = Enums.Packet.REQUEST,
+			S = serviceName,
+			M = methodName,
+			A = args,
+		}
 
-		-- Timeout 20s
-		local rf = self._root:WaitForChild(remoteName, 45)
-		if not rf then
-			return reject("Timeout: Remote '" .. remoteName .. "' not found")
+		local success, response = pcall(function()
+			return self._gateway:InvokeServer(packet)
+		end)
+
+		if not success then
+			return reject("Network Fail: " .. tostring(response))
 		end
 
-		local result = rf:InvokeServer(table.unpack(args))
-
-		if type(result) == "table" and result.Success ~= nil then
-			if result.Success then
-				resolve(result.Data)
+		if type(response) == "table" then
+			if response.C == Enums.Status.OK then
+				resolve(response.D)
 			else
-				reject(result.Error)
+				reject(response.E or "Server Error " .. tostring(response.C))
 			end
 		else
-			resolve(result)
+			reject("Invalid Protocol Response")
 		end
 	end)
 end
 
-function Bridge:Listen(serviceName, eventName, callback)
-	if IS_SERVER then
-		return
-	end
-	if not self._root then
-		return
-	end
+-- [NEW] RETRY POLICY IMPLEMENTATION
+-- options: { Retries = 3, Interval = 1 }
+function Bridge:RequestWithRetry(serviceName: string, methodName: string, options: any, ...: any)
+	local args = { ... }
+	local retries = options and options.Retries or 3
+	local interval = options and options.Interval or 1
 
-	local remoteName = serviceName .. "/" .. eventName
-	local re = self._root:WaitForChild(remoteName, 45)
-	if re then
-		re.OnClientEvent:Connect(callback)
-	end
+	return Promise.new(function(resolve, reject)
+		local attempts = 0
+
+		local function attempt()
+			attempts += 1
+			self:Request(serviceName, methodName, table.unpack(args)):andThen(resolve):catch(function(err)
+				if attempts < retries then
+					-- Log peringatan kecil (Opsional, agar dev tau ada retry)
+					-- print(string.format("🔄 Retry %d/%d for %s:%s - %s", attempts, retries, serviceName, methodName, tostring(err)))
+					task.wait(interval)
+					attempt()
+				else
+					reject(err) -- Gagal total setelah N percobaan
+				end
+			end)
+		end
+
+		attempt()
+	end)
 end
+
+function Bridge:Listen(serviceName: string, eventName: string, callback: (...any) -> ())
+	local key = serviceName .. "/" .. eventName
+	if not self._signals[key] then
+		self._signals[key] = Signal.new()
+	end
+	return self._signals[key]:Connect(callback)
+end
+
+-- Mock Server Methods
+function Bridge:Register(_, _)
+	return {}
+end
+function Bridge:Bind(_, _) end
+function Bridge:Fire() end
+function Bridge:FireAll() end
 
 return Bridge

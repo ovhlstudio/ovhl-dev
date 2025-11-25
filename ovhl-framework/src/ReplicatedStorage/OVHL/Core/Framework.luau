@@ -1,14 +1,16 @@
 --!strict
--- @Core: Framework (Central Factory - V2.2 With Auto-Trove)
--- @Role: Dependency Injector & Standardizer
+-- @Core: Framework (Central Factory - v0.3.0)
+-- @Role: Dependency Injector & Enterprise Standardizer
+-- @Feature: Context-Aware Action Guard (Auto-ID Generation)
+
 local RS = game:GetService("ReplicatedStorage")
 
 -- Internal Dependencies
 local Loader = require(RS.OVHL.Core.Loader)
 local SmartLogger = Loader.Get("Logger")
-local ActionGuard = Loader.Get("ActionGuard")
 local Bridge = Loader.Get("Bridge")
-local Trove = Loader.Get("Trove") -- [NEW] Load Trove di Pusat
+local Trove = Loader.Get("Trove")
+local ActionGuard = Loader.Get("ActionGuard") -- [NEW] Core Dependency
 
 local Framework = {}
 
@@ -19,25 +21,51 @@ function Framework.CreateController(def)
 	-- 1. Auto-Inject Logger & Tools
 	ctrl.Logger = SmartLogger.New(name:upper())
 	ctrl.Bridge = Bridge.New()
-	ctrl.Guard = ActionGuard
-	ctrl.Trove = Trove.new() -- [NEW] Otomatis pasang Tong Sampah Pintar
+	ctrl.Trove = Trove.new()
 
-	-- 2. Auto-Load Config (SMART LOADER PATCH)
+	-- [ENTERPRISE FEATURE] Context-Aware Guard Injection
+	-- Menyuntikkan ActionGuard dengan kemampuan Auto-ID berdasarkan nama Controller.
+	-- Ini mencegah bentrok lock antar modul (misal: Inventory vs Shop).
+	ctrl.Guard = ActionGuard
+
+	-- Helper: self:SafeRun("Equip", item.Id, func)
+	-- Otomatis ID: "NamaController:Equip:ItemId"
+	function ctrl:SafeRun(actionName, uniqueParam, callback)
+		local autoId = string.format("%s:%s:%s", name, actionName, tostring(uniqueParam or "Global"))
+		ActionGuard.Run({
+			Id = autoId,
+			Debounce = 0.5, -- Default debounce
+		}, callback)
+	end
+
+	-- Helper: self:SafeRunEx({Action="Buy", Key=id, Debounce=1, Confirm=...}, func)
+	-- Untuk kontrol lebih granular (Custom Debounce / Confirmation)
+	function ctrl:SafeRunEx(opts, callback)
+		local action = opts.Action or "General"
+		local key = opts.Key or "Global"
+		local autoId = string.format("%s:%s:%s", name, action, tostring(key))
+
+		-- Clone opts agar tidak merusak table asli, lalu inject ID
+		local guardOpts = table.clone(opts)
+		guardOpts.Id = autoId
+
+		ActionGuard.Run(guardOpts, callback)
+	end
+
+	-- 2. Auto-Load Config (PRESERVED LOGIC)
 	if ctrl.ConfigName then
 		local loadedConfig = nil
 		local loadSource = "None"
 
-		-- [STRATEGY A] Cek di Module Feature (Inventory, Shop)
+		-- [STRATEGY A] Cek di Module Feature
 		local successA, resA = pcall(function()
-			-- [FIXED] Tambahkan require() di sini!
 			return require(Loader.Module(ctrl.ConfigName).SharedConfig)
 		end)
 		if successA and resA then
 			loadedConfig = resA
 			loadSource = "Module"
 		else
-			-- [STRATEGY B] Cek di Global Config Folder (SystemPanelConfig)
-			-- Note: Loader.Config sudah otomatis require di dalam Proxy-nya, jadi ini aman.
+			-- [STRATEGY B] Cek di Global Config Folder
 			local successB, resB = pcall(function()
 				return Loader.Config(ctrl.ConfigName)
 			end)
@@ -57,11 +85,10 @@ function Framework.CreateController(def)
 		end
 	end
 
-	-- 3. Lifecycle Wrapper
+	-- 3. Lifecycle Wrapper (PRESERVED LOGIC)
 	local originalInit = ctrl.Init
 	function ctrl:Init(ctx)
 		if originalInit then
-			-- Bungkus dengan pcall biar kalau Init error, gak matiin thread utama
 			local s, err = pcall(originalInit, self, ctx)
 			if not s then
 				ctrl.Logger:Error("InitCrash", err)
@@ -69,14 +96,13 @@ function Framework.CreateController(def)
 		end
 	end
 
-	-- [NEW] Auto Cleanup Method
-	-- Framework sekarang punya standar cara mematikan Controller
+	-- Auto Cleanup Method
 	function ctrl:Destroy()
 		if self.Shutdown then
 			self:Shutdown()
-		end -- Panggil custom shutdown user dulu
+		end
 		if self.Trove then
-			self.Trove:Destroy() -- Bersihkan sampah otomatis
+			self.Trove:Destroy()
 			self.Trove = nil
 		end
 	end
