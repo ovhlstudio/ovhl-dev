@@ -1,25 +1,30 @@
 --!strict
--- @Core: Loader v5.2 (Stable & Forgiving)
--- @Role: Central Dependency Registry
+-- @Core: Loader v0.2.0 (Optimized & Deterministic)
+-- @Role: Central Dependency Registry with Caching
+-- @Mandate: Mandat 2 (Performance & Determinism)
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local RunService = game:GetService("RunService")
 
 local Loader = {}
 
--- [0] DEBUGGER
+-- [0] DEBUGGER & OBSERVABILITY
 local DEBUG_MODE = RunService:IsStudio()
+
 local function log(msg: string, level: string?)
 	if not DEBUG_MODE then
 		return
 	end
+
 	local prefix = "[OVHL-LOADER]"
 	if level == "ERROR" then
 		warn(string.format("🔴 %s %s", prefix, msg))
 	elseif level == "WARN" then
 		warn(string.format("⚠️ %s %s", prefix, msg))
 	else
-		print(string.format("🔍 %s %s", prefix, msg))
+		-- [AI OBSERVABILITY] Verbose log hanya muncul saat dev
+		print(string.format("⚡ %s %s", prefix, msg))
 	end
 end
 
@@ -29,36 +34,54 @@ local ROOTS = {
 	Packages = ReplicatedStorage:WaitForChild("Packages"),
 }
 
--- [HELPER] Wally Package Finder (Fixed)
-local function findPkg(pkgName: string)
+-- [2] PACKAGE CACHE (Optimization)
+-- Menyimpan referensi package yang sudah ditemukan agar tidak looping folder lagi
+local _packageCache: { [string]: Instance } = {}
+
+local function findPkg(pkgName: string): Instance?
+	-- 1. Cek Cache (O(1))
+	if _packageCache[pkgName] then
+		return _packageCache[pkgName]
+	end
+
+	-- 2. Cek Exact Match
 	local exact = ROOTS.Packages:FindFirstChild(pkgName)
 	if exact then
+		_packageCache[pkgName] = exact
 		return exact
 	end
 
+	-- 3. Scan Wally Format (O(n) - Only runs once per package per session)
 	local lowerName = pkgName:lower()
 	for _, child in ipairs(ROOTS.Packages:GetChildren()) do
 		local cName = child.Name:lower()
+		-- Logika standar Wally: author_repo@version atau index folder
 		if
 			cName:find("_" .. lowerName .. "@", 1, true)
 			or cName:find("^" .. lowerName .. "@")
 			or cName:find(lowerName, 1, true)
 		then
+			_packageCache[pkgName] = child -- Simpan ke cache!
+			log("Package Cached: " .. pkgName .. " -> " .. child.Name)
 			return child
 		end
 	end
+
 	return nil
 end
 
--- [2] ALIAS REGISTRY
+-- [3] ALIAS REGISTRY (Preserved from v0.1.0)
 local ALIAS_MAP = {
 	-- CORE
 	["Framework"] = ROOTS.OVHL.Core.Framework,
 	["Context"] = ROOTS.OVHL.Core.Context,
 	["Logger"] = ROOTS.OVHL.Core.SmartLogger,
+
+	-- [NETWORKING PREP] Nanti file ini akan direwrite di Fase 2, tapi reference tetap aman
 	["Bridge"] = ROOTS.OVHL.Core.Networking.Bridge,
 	["Enums"] = ROOTS.OVHL.Core.Networking.NetworkEnums,
 	["Middleware"] = ROOTS.OVHL.Core.Networking.Middleware,
+
 	["Signals"] = ROOTS.OVHL.Core.Signals,
 	["Constants"] = ROOTS.OVHL.Core.Constants,
 	["Manifest"] = ROOTS.OVHL.Core.Manifest,
@@ -67,7 +90,7 @@ local ALIAS_MAP = {
 	["ConfigLoader"] = ROOTS.OVHL.Core.SharedConfigLoader,
 	["TypeValidator"] = ROOTS.OVHL.Core.TypeValidator,
 
-	-- UI
+	-- UI FOUNDATION
 	["API"] = ROOTS.OVHL.UI.Foundation.API,
 	["Theme"] = ROOTS.OVHL.UI.Foundation.OVHLTheme,
 	["Assets"] = ROOTS.OVHL.UI.Foundation.Assets,
@@ -77,8 +100,9 @@ local ALIAS_MAP = {
 	["Motion"] = ROOTS.OVHL.UI.Foundation.Motion,
 	["MotionPresets"] = ROOTS.OVHL.UI.Foundation.MotionPresets,
 	["Topbar"] = ROOTS.OVHL.UI.Foundation.Bridges.Topbar,
+	["Layout"] = ROOTS.OVHL.UI.Foundation.Layout,
 
-	-- PACKAGES
+	-- PACKAGES (Lazy Loaded via Cache if not explicit)
 	["Onyx"] = findPkg("onyx-ui"),
 	["TestEZ"] = findPkg("TestEZ"),
 	["Fusion"] = findPkg("Fusion"),
@@ -88,54 +112,31 @@ local ALIAS_MAP = {
 	["ProfileService"] = findPkg("ProfileService"),
 }
 
--- [3] FUZZY SEARCH
-local function getDidYouMean(badName: string, validNames: { string })
-	local bestMatch = nil
-	local bestScore = 999
-	for _, name in ipairs(validNames) do
-		local score = math.abs(#name - #badName)
-		if name:lower():match(badName:lower()) then
-			score = score - 2
-		end
-		if score < 3 and score < bestScore then
-			bestScore = score
-			bestMatch = name
-		end
-	end
-	return bestMatch
-end
-
 -- [4] PUBLIC API
 function Loader.Get(aliasName: string)
+	-- A. Cek Alias Map
 	local target = ALIAS_MAP[aliasName]
 	if target then
 		return require(target)
 	end
 
-	log("Alias '" .. aliasName .. "' not in Registry. Hunting in Packages...", "WARN")
+	-- B. Cek Cache / Packages (Fallback)
+	-- Hanya lakukan ini jika tidak ada di Alias Map.
 	local pkg = findPkg(aliasName)
 	if pkg then
-		log("✅ Auto-detected Package: " .. pkg.Name)
 		return require(pkg)
 	end
 
-	local keys = {}
-	for k in pairs(ALIAS_MAP) do
-		table.insert(keys, k)
-	end
-	local suggestion = getDidYouMean(aliasName, keys)
-	local msg = string.format("\n🛑 [OVHL-LOADER] Fatal Error: Module '%s' not found!", aliasName)
-	if suggestion then
-		msg = msg .. string.format("\n💡 Did you mean: '%s'?", suggestion)
-	end
-	log("❌ " .. msg, "ERROR")
+	-- C. Strict Error (No Fuzzy Search)
+	local msg = string.format("🛑 [OVHL-LOADER] Fatal: Module '%s' not found in Registry or Packages.", aliasName)
+	log(msg, "ERROR")
 	error(msg, 2)
 end
 
--- [5] LEGACY & COMPATIBILITY
-local function createFolderProxy(folder)
+-- [5] PROXY & LEGACY SUPPORT (Proxies preserved)
+local function createFolderProxy(folder: Instance)
 	return setmetatable({}, {
-		__index = function(_, key)
+		__index = function(_, key: string)
 			local target = folder:FindFirstChild(key)
 			if not target then
 				error("❌ '" .. key .. "' not found in " .. folder.Name)
@@ -145,7 +146,7 @@ local function createFolderProxy(folder)
 			end
 			return createFolderProxy(target)
 		end,
-		__call = function(_, pathStr)
+		__call = function(_, pathStr: string)
 			local current = folder
 			for _, seg in ipairs(string.split(pathStr, "/")) do
 				current = current:FindFirstChild(seg)
@@ -160,11 +161,17 @@ end
 
 Loader.UI = createFolderProxy(ROOTS.OVHL.UI)
 Loader.Config = createFolderProxy(ROOTS.OVHL.Config)
-Loader.Module = function(featureName)
-	return ROOTS.OVHL.Modules:FindFirstChild(featureName) or error("Module not found")
+
+-- Helper Module Loader (Feature Modules)
+Loader.Module = function(featureName: string)
+	local target = ROOTS.OVHL.Modules:FindFirstChild(featureName)
+	if not target then
+		error("Module Feature '" .. featureName .. "' not found in OVHL.Modules")
+	end
+	return target
 end
 
--- [SAFETY NET] Biar kode lama yang lolos refactor gak crash
+-- Compatibility Helper (Backward Compat)
 Loader.Pkg = setmetatable({}, {
 	__call = function(_, name)
 		if name == "onyx-ui" then
@@ -174,9 +181,10 @@ Loader.Pkg = setmetatable({}, {
 	end,
 })
 
+-- Server Side Pathing (Only exposed on Server)
 if RunService:IsServer() then
 	local ServerRoot = ServerScriptService:WaitForChild("OVHL")
-	Loader.Server = function(pathStr)
+	Loader.Server = function(pathStr: string)
 		local current = ServerRoot
 		for _, seg in ipairs(string.split(pathStr, "/")) do
 			current = current:FindFirstChild(seg)
