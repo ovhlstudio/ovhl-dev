@@ -1,4 +1,5 @@
 --!strict
+-- @Core: Observable v2.0 (Raw Logging)
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
 local Signal = Loader.Get("Signal")
@@ -21,8 +22,15 @@ function Observable:Set(val)
         local old = self._value
         self._value = val
         self._signal:Fire(val, old)
+        
         if self._logger then
-            self._logger:Debug("Change", { Var = self._tag, From = tostring(old), To = tostring(val) })
+            -- [FIX] Jangan gunakan tostring()! Kirim Raw Data.
+            -- Biarkan SmartLogger yang menangani formatting (JSON/Serialize).
+            self._logger:Debug("Change", { 
+                Var = self._tag, 
+                From = old, 
+                To = val 
+            })
         end
     end
 end
@@ -30,4 +38,5 @@ end
 function Observable:Get() return self._value end
 function Observable:Subscribe(cb) task.spawn(cb, self._value); return self._signal:Connect(cb) end
 function Observable:Log(tagName: string) self._tag = tagName; self._logger = SmartLogger.New("STATE"); return self end
+
 return Observable
