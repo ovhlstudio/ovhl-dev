@@ -1,5 +1,5 @@
 --!strict
--- @Controller: ShowcaseController v5.2 (Wired & Networked)
+-- @Controller: ShowcaseController v5.3 (Ping Tester)
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
 
@@ -21,14 +21,10 @@ function Ctrl:Init(ctx)
     self.State = {
         Visible = Observable.New(false):Log("ShowcaseVis"),
         CurrentTab = Observable.New("Home"):Log("NavTab"),
-        
         WindowSize = Observable.New(UDim2.fromOffset(defCfg.X, defCfg.Y)), 
         WindowPos  = Observable.New(UDim2.fromScale(0.5, 0.5)),
         WindowAnchor = Observable.New(Vector2.new(0.5, 0.5)),
-        
-        -- [WIRED] Start Kosong! Data akan diisi oleh Server.
         InventoryList = Observable.New({}):Log("InvData"),
-
         ActiveModal = Observable.New(nil),
         ActiveToast = Observable.New(nil),
         Toggles = { Music = Observable.New(true):Log("Music"), SFX = Observable.New(false) },
@@ -47,26 +43,43 @@ function Ctrl:Init(ctx)
                 self.State.WindowSize:Set(smartSize)
                 self.State.Actions.SetLayout("Center")
             end,
-            
-            -- [WIRED ACTION] Equip Item ke Server
             EquipItem = function(itemId, itemName)
                 self.Logger:Info("Action", "Requesting Equip: " .. itemName)
-                
-                -- Kirim Paket ke Server
                 self.Network:Request("Inventory", "PerformAction", itemId, "Equip")
                     :andThen(function(result)
-                        -- Sukses: Tampilkan pesan dari server & Refresh Data
                         self.State.Actions.TriggerToast(result.Msg, "Success")
-                        self:FetchData() -- Pull data terbaru (Status Equipped berubah)
+                        self:FetchData()
                     end)
                     :catch(function(err)
-                        -- Gagal: Tampilkan Error (misal: Spam, Item hilang)
                         self.State.Actions.TriggerToast("Error: " .. tostring(err), "Error")
                         self.Logger:Warn("EquipFail", err)
                     end)
             end,
             
-            PingServer = function() self.Network:Fire("Showcase", "Ping") end,
+            -- [PING TESTER]
+            PingServer = function() 
+                self.Logger:Info("Network", "Sending Ping Request...")
+                
+                -- Panggil sebagai Request agar bisa ditangkap balasan/errornya
+                self.Network:Request("Showcase", "Ping")
+                    :andThen(function(res)
+                        -- SUKSES: Server membalas
+                        self.Logger:Info("PingOK", res)
+                        self.State.Actions.TriggerToast("Pong! Server Alive.", "Success")
+                    end)
+                    :catch(function(err)
+                        -- GAGAL: Bisa karena Timeout atau RATE LIMIT
+                        self.Logger:Warn("PingFail", err)
+                        
+                        -- Cek apakah errornya Rate Limit (Code 429)
+                        if string.find(tostring(err), "429") or string.find(tostring(err), "Rate Limit") then
+                            self.State.Actions.TriggerToast("⛔ SPAM DETECTED (Rate Limit)", "Error")
+                        else
+                            self.State.Actions.TriggerToast("Ping Error: " .. tostring(err), "Error")
+                        end
+                    end)
+            end,
+            
             TriggerModal = function() self.State.ActiveModal:Set({ Title = "CONFIRM", Body = "Delete?", ActionLabel = "Yes", OnConfirm = function() self.State.ActiveModal:Set(nil) end, OnCancel = function() self.State.ActiveModal:Set(nil) end }) end,
             TriggerToast = function(msg, var) self.State.ActiveToast:Set({ID=os.clock(), Message=msg, Variant=var}) end,
             DismissToast = function() self.State.ActiveToast:Set(nil) end,
@@ -75,21 +88,10 @@ function Ctrl:Init(ctx)
     }
 end
 
--- [NEW] Fungsi Fetch Data dari Server
 function Ctrl:FetchData()
-    self.Logger:Debug("Net", "Fetching Inventory from Server...")
-    
     self.Network:Request("Inventory", "GetItems")
-        :andThen(function(data)
-            -- [SUCCESS] Server merespon dengan Array Item
-            self.Logger:Info("Net", "Inventory Received: " .. #data .. " items")
-            self.State.InventoryList:Set(data)
-        end)
-        :catch(function(err)
-            -- [FAIL] Server Error / Timeout
-            self.Logger:Error("NetFail", "Failed to fetch inventory: " .. tostring(err))
-            self.State.Actions.TriggerToast("Connection Failed", "Error")
-        end)
+        :andThen(function(data) self.State.InventoryList:Set(data) end)
+        :catch(function(err) self.State.Actions.TriggerToast("Connection Failed", "Error") end)
 end
 
 function Ctrl:Start()
@@ -102,15 +104,11 @@ function Ctrl:Start()
     UIManager.Render("MainView", self.State, renderConfig)
     
     local defCfg = self.Config.Layout.DefaultSize or {X=600,Y=450}
-    
     task.delay(0.5, function()
         local newSize = LayoutUtil.GetSmartSize(Vector2.new(defCfg.X, defCfg.Y))
         self.State.WindowSize:Set(newSize)
-        
-        -- [AUTO FETCH] Ambil data saat aplikasi mulai
         self:FetchData()
     end)
-    
     workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
         local newSize = LayoutUtil.GetSmartSize(Vector2.new(defCfg.X, defCfg.Y))
         self.State.WindowSize:Set(newSize)

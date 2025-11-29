@@ -1,16 +1,19 @@
 --!strict
--- @Service: DataManager v2.5 (Unified)
+-- @Service: DataManager v3.2 (Kernel Managed)
+-- @Role: Handle Data Lifecycle (Controlled by ServerKernel ONLY)
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
 
 local ProfileService = Loader.Get("ProfileService")
 local Env = Loader.Get("Env")
-local DataMigrator = Loader.Get("DataMigrator") -- CLEAN
+local DataMigrator = Loader.Get("DataMigrator")
 
 local DataManager = {}
 local ProfileStore = nil
 local Profiles = {}
+
+DataManager._isShuttingDown = false
 
 local DATA_TEMPLATE = {
 	_SchemaVersion = 1,
@@ -30,7 +33,10 @@ function DataManager:Init(ctx)
 	else
 		ProfileStore = ProfileService.GetProfileStore(storeName, DATA_TEMPLATE)
 	end
-	game:BindToClose(function() self:Shutdown() end)
+    
+    -- [FIX] HAPUS BindToClose LOKAL. 
+    -- Biarkan ServerKernel yang memanggil Shutdown() kita.
+    -- Ini mencegah Race Condition (Double Save).
 end
 
 function DataManager:Start()
@@ -40,10 +46,15 @@ function DataManager:Start()
 end
 
 function DataManager:Shutdown()
+    if self._isShuttingDown then return end
+    self._isShuttingDown = true
+
+    self.Logger:Warn("Save", "🛑 Saving all active profiles...")
 	for _, profile in pairs(Profiles) do profile:Release() end
 end
 
 function DataManager:OnJoin(player)
+    if self._isShuttingDown then return end
 	if Profiles[player] then return end
 	local profile = ProfileStore:LoadProfileAsync("Player_" .. player.UserId)
 
@@ -51,13 +62,15 @@ function DataManager:OnJoin(player)
 		profile:AddUserId(player.UserId)
 		profile:Reconcile()
 		DataMigrator.Migrate(profile, self.Logger)
+		
 		profile:ListenToRelease(function()
 			Profiles[player] = nil
+            self.Logger:Info("Save", { Msg="Profile Released (Saved)", User=player.Name })
 			pcall(function() player:Kick("Session End") end)
 		end)
+        
 		if player:IsDescendantOf(Players) then
 			Profiles[player] = profile
-            -- logic
             local d = profile.Data
 			if d.Meta.FirstJoin == 0 then d.Meta.FirstJoin = os.time() end
 			d.Meta.LastLogin = os.time()
@@ -73,8 +86,10 @@ end
 
 function DataManager:OnQuit(player)
 	local profile = Profiles[player]
-	if profile then profile:Release() end
-	Profiles[player] = nil
+	if profile then 
+        self.Logger:Info("Save", { Msg="Closing Session...", User=player.Name })
+        profile:Release() 
+    end
 end
 
 function DataManager:Get(player)

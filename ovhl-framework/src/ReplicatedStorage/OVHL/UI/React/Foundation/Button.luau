@@ -1,6 +1,6 @@
 --!strict
--- @Atom: Button v3.1 (Enterprise Standard)
--- @Role: Interactive Element with Configurable Anti-Spam
+-- @Atom: Button v3.3 (Math Debounce)
+-- @Role: Interactive Element with Precise Timestamp Checking
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
 
@@ -8,18 +8,17 @@ local React = Loader.Get("React")
 local Telemetry = Loader.Get("Telemetry")
 local Style = Loader.Get("Style")
 local Players = game:GetService("Players")
-local UIConfig = require(RS.OVHL.Config.UISystemConfig) -- The Law
+local UIConfig = require(RS.OVHL.Config.UISystemConfig)
 
 local e = React.createElement
 local useState = React.useState
+local useRef = React.useRef
 
 export type Props = { 
     Text: string, Variant: string?, Size: UDim2?, 
     OnClick: (() -> ())?, Disabled: boolean?, 
     Permission: number?, LayoutOrder: number?,
-    
-    -- [OPTIONAL] Override Global Default
-    DebounceTime: number? 
+    DebounceTime: number?
 }
 
 return function(props: Props)
@@ -27,21 +26,22 @@ return function(props: Props)
     
     local hover, setHover = useState(false)
     local press, setPress = useState(false)
-    local locked, setLocked = useState(false) -- Internal Cooldown State
+    
+    -- [MATH GUARD]
+    -- Simpan waktu klik terakhir. Jangan andalkan state boolean semata.
+    local lastClickRef = useRef(0)
+    local isLockedVisually, setVisualLock = useState(false)
     
     local myRank = Players.LocalPlayer:GetAttribute("OVHL_Rank") or 0
     local isPermLocked = myRank < (props.Permission or 0)
-    
-    -- Tombol mati jika: Disabled Owner / Permision / Sedang Cooldown
-    local isDisabled = props.Disabled or isPermLocked or locked
+    local isDisabled = props.Disabled or isPermLocked or isLockedVisually
 
-    -- Style Resolution
     local variant = props.Variant or "Primary"
     local palette = Style.Colors.Action[variant] or Style.Colors.Action.Primary
     local bgColor = palette.Default
     
     if props.Disabled or isPermLocked then bgColor = Style.Colors.Background.Surface 
-    elseif locked then bgColor = palette.Press -- Visual Feedback: Tahan di warna 'Press' saat cooldown
+    elseif isLockedVisually then bgColor = palette.Press 
     elseif press then bgColor = palette.Press 
     elseif hover then bgColor = palette.Hover end
 
@@ -51,22 +51,28 @@ return function(props: Props)
             return 
         end
         
-        -- The Shield: Blokir jika sedang cooldown
-        if locked or props.Disabled then return end
+        if props.Disabled then return end
 
-        -- 1. Lock
-        setLocked(true)
-        logger:Interact(props.Text, "Click")
-        
-        -- 2. Execute
-        if props.OnClick then task.spawn(props.OnClick) end
-        
-        -- 3. Determine Cooldown Time (Prop > Global Default)
+        local now = os.clock()
         local cooldown = props.DebounceTime or UIConfig.Behavior.DefaultDebounce
         
-        -- 4. Unlock after delay
+        -- [PRECISION CHECK]
+        -- Jika waktu sekarang - waktu terakhir < cooldown, TOLAK.
+        if (now - lastClickRef.current) < cooldown then 
+            return 
+        end
+
+        -- Update waktu klik terakhir
+        lastClickRef.current = now
+        
+        -- Visual Feedback (Async, gak masalah telat dikit, yg penting logic di atas aman)
+        setVisualLock(true)
+        logger:Interact(props.Text, "Click")
+        
+        if props.OnClick then task.spawn(props.OnClick) end
+        
         task.delay(cooldown, function()
-            setLocked(false)
+            setVisualLock(false)
         end)
     end
 
@@ -74,13 +80,11 @@ return function(props: Props)
         Text = isPermLocked and "🔒 " .. props.Text or props.Text, 
         Font = Style.Fonts.Header, 
         TextSize = Style.TextSize.Body,
-        TextColor3 = (isDisabled and not locked) and Style.Colors.Text.Muted or palette.Content, 
+        TextColor3 = (isDisabled and not isLockedVisually) and Style.Colors.Text.Muted or palette.Content, 
         
         Size = props.Size or UDim2.fromOffset(140, 44),
         BackgroundColor3 = bgColor, 
-        
-        -- Opacity Feedback: Agak transparan saat cooldown agar user 'merasakan' delay
-        BackgroundTransparency = (variant == "Ghost" and not hover and not locked) and 1 or (locked and 0.2 or 0), 
+        BackgroundTransparency = (variant == "Ghost" and not hover and not isLockedVisually) and 1 or (isLockedVisually and 0.2 or 0), 
         
         AutoButtonColor = false, 
         LayoutOrder = props.LayoutOrder,
