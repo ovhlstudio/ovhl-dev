@@ -1,10 +1,14 @@
 --!strict
--- @Core: Loader v2.7 (DeviceUtil Added)
+-- @Core: Loader v2.8 (Data Layer Added)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local RunService = game:GetService("RunService")
 local Loader = {}
-local ROOTS = { OVHL = ReplicatedStorage:WaitForChild("OVHL"), Packages = ReplicatedStorage:WaitForChild("Packages") }
+local ROOTS = { 
+    OVHL = ReplicatedStorage:WaitForChild("OVHL"), 
+    Packages = ReplicatedStorage:WaitForChild("Packages") 
+}
+
 local _packageCache = {}
 local function findPkg(pkgName)
 	if _packageCache[pkgName] then return _packageCache[pkgName] end
@@ -16,23 +20,41 @@ local function findPkg(pkgName)
 	end
 	return nil
 end
+
 local ALIAS_MAP = {
+    -- Core
 	["Framework"] = ROOTS.OVHL.Core.Framework, ["Context"] = ROOTS.OVHL.Core.Context,
 	["Logger"] = ROOTS.OVHL.Core.SmartLogger, ["Signals"] = ROOTS.OVHL.Core.Signals,
     ["Manifest"] = ROOTS.OVHL.Core.Manifest, ["Env"] = ROOTS.OVHL.Core.Env,
+    ["Constants"] = ROOTS.OVHL.Core.Constants, -- [ADDED]
+    
+    -- Config & Tools
     ["ConfigLoader"] = ROOTS.OVHL.Core.SharedConfigLoader, ["Schema"] = ROOTS.OVHL.Core.ConfigSchema,
     ["TypeValidator"] = ROOTS.OVHL.Core.TypeValidator, ["RateLimiter"] = ROOTS.OVHL.Core.RateLimiter,
+    
+    -- Networking
     ["Bridge"] = ROOTS.OVHL.Core.Networking.Bridge, ["Enums"] = ROOTS.OVHL.Core.Networking.NetworkEnums,
+    
+    -- UI Engine
     ["UIManager"] = ROOTS.OVHL.Core.UI.UIManager, ["Observable"] = ROOTS.OVHL.Core.UI.Observable,
     ["Telemetry"] = ROOTS.OVHL.Core.UI.Telemetry, ["LayoutUtil"] = ROOTS.OVHL.Core.UI.LayoutUtil,
     ["SmartFinder"] = ROOTS.OVHL.Core.UI.SmartFinder, ["MotionUtil"] = ROOTS.OVHL.Core.UI.MotionUtil,
-    ["DeviceUtil"] = ROOTS.OVHL.Core.UI.DeviceUtil, -- [ADDED HERE]
+    ["DeviceUtil"] = ROOTS.OVHL.Core.UI.DeviceUtil,
+    
+    -- UI Components
     ["Style"] = ROOTS.OVHL.UI.React.Foundation.Style, ["Assets"] = ROOTS.OVHL.UI.React.Foundation.Assets,
     ["Atoms"] = ROOTS.OVHL.UI.React.Foundation.Package, ["Molecules"] = ROOTS.OVHL.UI.React.Components.Package,
+    
+    -- Data Layer [NEW]
+    -- Pastikan folder 'Data' dibuat di ReplicatedStorage/OVHL
+    ["ItemDB"] = ROOTS.OVHL:FindFirstChild("Data") and ROOTS.OVHL.Data:FindFirstChild("ItemDatabase"), 
+    
+    -- Packages
     ["React"] = findPkg("React"), ["ReactRoblox"] = findPkg("ReactRoblox"), ["Reflex"] = findPkg("Reflex"),
     ["Promise"] = findPkg("Promise"), ["Signal"] = findPkg("Signal"), ["Trove"] = findPkg("Trove"),
     ["TestEZ"] = findPkg("TestEZ"), ["ProfileService"] = findPkg("ProfileService"), ["Topbar"] = findPkg("TopbarPlus"),
 }
+
 if RunService:IsServer() then
     local S_OVHL = ServerScriptService:WaitForChild("OVHL"); local S_CORE = S_OVHL:WaitForChild("Core")
     ALIAS_MAP["ServerKernel"] = S_CORE.ServerKernel; ALIAS_MAP["NetworkGuard"] = S_CORE.NetworkGuard
@@ -42,13 +64,23 @@ if RunService:IsServer() then
     end
     if S_OVHL:FindFirstChild("Config") then ALIAS_MAP["PermissionConfig"] = S_OVHL.Config.PermissionConfig end
 end
+
 function Loader.Get(aliasName)
 	local target = ALIAS_MAP[aliasName]
 	if target then return require(target) end
 	local pkg = findPkg(aliasName)
 	if pkg then return require(pkg) end
+    
+    -- Auto-Fix: Jika ItemDB belum di-map (mungkin folder baru dibuat), coba cari runtime
+    if aliasName == "ItemDB" then
+        local db = ROOTS.OVHL:WaitForChild("Data"):WaitForChild("ItemDatabase")
+        ALIAS_MAP["ItemDB"] = db
+        return require(db)
+    end
+    
 	error("🛑 [LOADER] Fatal: Module '" .. aliasName .. "' not found.", 2)
 end
+
 Loader.Module = function(featureName)
 	local target = ROOTS.OVHL.Modules:FindFirstChild(featureName)
     if not target and RunService:IsClient() then
@@ -58,10 +90,12 @@ Loader.Module = function(featureName)
 	if not target then error("Module Feature '" .. featureName .. "' not found") end
 	return target
 end
+
 Loader.UI = { React = ROOTS.OVHL.UI.React, Native = ROOTS.OVHL.UI.Native, Core = ROOTS.OVHL.Core.UI }
 Loader.Config = function(configName)
     local cfgFolder = ROOTS.OVHL.Config; local target = cfgFolder:FindFirstChild(configName)
     if target then return require(target) end
     error("Config '"..configName.."' not found in OVHL.Config")
 end
+
 return Loader

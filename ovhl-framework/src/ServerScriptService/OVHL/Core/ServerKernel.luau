@@ -1,5 +1,5 @@
 --!strict
--- @Kernel: Server v0.3.0
+-- @Kernel: Server v0.3.1 (Rate Limit Injected)
 -- @Role: Service Bootstrapper & Lifecycle Manager
 local ServerScriptService = game:GetService("ServerScriptService")
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
@@ -7,7 +7,7 @@ local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
 local Context = Loader.Get("Context")
 local SmartLogger = Loader.Get("Logger")
 local Manifest = Loader.Get("Manifest")
--- Bootstrap Import
+local RateLimiter = Loader.Get("RateLimiter") -- [NEW] Import Class
 local Bridge = require(ServerScriptService.OVHL.Core.NetworkBridge) 
 
 local ServerKernel = {}
@@ -52,7 +52,12 @@ function ServerKernel.Boot()
 
 	-- Dependency Injection (Clean Path)
 	services.Adapters = { DB = Loader.Get("InternalDB"), HD = Loader.Get("HDAdmin") }
-	local ctx = Context.New(services)
+	
+    local ctx = Context.New(services)
+    
+    -- [CRITICAL FIX] Inject Global Rate Limiter Instance
+    ctx.RateLimiter = RateLimiter.New() 
+    
 	ctx.Network = Bridge.New(ctx) 
 
 	ServerKernel._services = services

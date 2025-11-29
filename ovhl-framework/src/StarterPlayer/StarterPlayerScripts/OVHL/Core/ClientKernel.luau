@@ -1,13 +1,10 @@
 --!strict
--- @Kernel: Client v0.2.3 (Stable Injection)
--- @Role: Client Bootstrapper, Memory Guard & Dependency Injector
--- @Mandate: Mandat 4 (Memory Management)
-
+-- @Kernel: Client v0.3.0 (Vital Monitor)
+-- @Role: Client Bootstrapper & System Health Check
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(RS.OVHL.Core.Loader)
 
--- Core Dependencies
 local ConfigLoader = Loader.Get("ConfigLoader")
 local Bridge = Loader.Get("Bridge")
 local Context = Loader.Get("Context")
@@ -19,12 +16,10 @@ ClientKernel._controllers = {}
 ClientKernel._isShuttingDown = false
 
 function ClientKernel.Boot()
-    -- System Logger (Untuk Kernel sendiri)
 	local Log = SmartLogger.New("SYSTEM")
 	Log:Info("Boot", string.format("🎮 %s v%s CLIENT STARTING...", 
         Manifest.Identity.Name, Manifest.Version.Full))
 
-    -- Central Bridge Instance (Singleton)
     local sharedBridge = Bridge.New()
 
 	local systems = {
@@ -40,23 +35,12 @@ function ClientKernel.Boot()
 		if module:IsA("ModuleScript") then
 			local ok, res = pcall(require, module)
 			if ok and type(res) == "table" then
-                -- [CRITICAL FIX: DEPENDENCY INJECTION]
-                -- Menyuntikkan kemampuan Superpower ke Controller Raw
                 res.Name = res.Name or module.Name
-                
-                -- 1. Inject Logger (Scoped)
-                if not res.Logger then
-                    res.Logger = SmartLogger.New(res.Name)
-                end
-                
-                -- 2. Inject Bridge (Network Access)
-                if not res.Bridge then
-                    res.Bridge = sharedBridge
-                end
+                if not res.Logger then res.Logger = SmartLogger.New(res.Name) end
+                if not res.Bridge then res.Bridge = sharedBridge end
 
-                -- 3. Register to System
 				systems.Controllers[module.Name] = res
-				systems[module.Name] = res -- Alias shortcut
+				systems[module.Name] = res 
 				Log:Debug("Load", "   + Controller: " .. module.Name)
 			else
 				Log:Error("RegisterFail", { Module = module.Name, Error = res })
@@ -104,6 +88,21 @@ function ClientKernel.Boot()
 			end
 		end
 		Log:Info("Boot", "✅ CLIENT BOOT COMPLETE")
+        
+        -- [VITAL MONITOR] Enterprise Health Check
+        task.spawn(function()
+            local startTime = os.time()
+            while not ClientKernel._isShuttingDown do
+                task.wait(60) -- Check every 1 minute
+                local mem = math.floor(gcinfo() / 1024) -- MB
+                local uptime = os.time() - startTime
+                Log:Info("Vital", { 
+                    Memory = mem .. " MB", 
+                    Uptime = uptime .. "s",
+                    Instances = #game:GetDescendants()
+                })
+            end
+        end)
 	end)
 end
 

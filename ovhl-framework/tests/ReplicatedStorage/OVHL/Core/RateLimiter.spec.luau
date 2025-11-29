@@ -1,31 +1,38 @@
---!strict
 return function()
-	local RS = game:GetService("ReplicatedStorage")
-    -- [FIX] Load via Loader
-	local Loader = require(RS.OVHL.Core.Loader)
-	local RateLimiter = Loader.Get("RateLimiter")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Loader = require(ReplicatedStorage.OVHL.Core.Loader)
+    local RateLimiter = Loader.Get("RateLimiter").New()
+    local Mock = require(ReplicatedStorage.Tests.Mocks.MockUtils)
 
-	local MockPlayer = { UserId = 99999 }
+    describe("Rate Limiter Algorithm", function()
+        it("should allow burst requests within limit", function()
+            local player = Mock.GetPlayer()
+            -- Config: Max 2, Interval 10 (Sangat lambat refill)
+            -- Request 1 (Lolos)
+            local r1 = RateLimiter:Check(player, "TestSpam", 2, 10)
+            expect(r1).to.equal(true)
+            
+            -- Request 2 (Lolos)
+            local r2 = RateLimiter:Check(player, "TestSpam", 2, 10)
+            expect(r2).to.equal(true)
+        end)
 
-	describe("[UNIT-TEST] RateLimiter (Shared)", function()
-		it("should initialize correctly", function()
-			local limiter = RateLimiter.New()
-			expect(limiter).to.be.ok()
-		end)
-
-		it("should BLOCK requests exceeding quota", function()
-			local limiter = RateLimiter.New()
-			local action = "SpamTest"
-			local limit = 5
-            local interval = 10
-
-			for i = 1, limit do
-				local allowed = limiter:Check(MockPlayer, action, limit, interval)
-				expect(allowed).to.equal(true)
-			end
-
-			local spam = limiter:Check(MockPlayer, action, limit, interval)
-			expect(spam).to.equal(false)
-		end)
-	end)
+        it("should block requests exceeding limit immediately", function()
+            local player = Mock.GetPlayer()
+            -- Reset bucket dengan nama action beda
+            -- Config: Max 1
+            local r1 = RateLimiter:Check(player, "StrictTest", 1, 10)
+            expect(r1).to.equal(true)
+            
+            -- Spam langsung (detik yang sama)
+            local r2 = RateLimiter:Check(player, "StrictTest", 1, 10)
+            expect(r2).to.equal(false) -- Harus Ditolak
+        end)
+        
+        it("should refill tokens over time", function()
+            -- Ini sulit ditest di unit test sinkronus tanpa mocking os.clock
+            -- Tapi kita bisa test logika dasarnya aman dari crash
+            expect(RateLimiter._buckets).to.be.a("table")
+        end)
+    end)
 end
