@@ -1,199 +1,67 @@
 --!strict
--- @Core: Loader v0.2.0 (Optimized & Deterministic)
--- @Role: Central Dependency Registry with Caching
--- @Mandate: Mandat 2 (Performance & Determinism)
-
+-- @Core: Loader v2.7 (DeviceUtil Added)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local RunService = game:GetService("RunService")
-
 local Loader = {}
-
--- [0] DEBUGGER & OBSERVABILITY
-local DEBUG_MODE = RunService:IsStudio()
-
-local function log(msg: string, level: string?)
-	if not DEBUG_MODE then
-		return
-	end
-
-	local prefix = "[OVHL-LOADER]"
-	if level == "ERROR" then
-		warn(string.format("🔴 %s %s", prefix, msg))
-	elseif level == "WARN" then
-		warn(string.format("⚠️ %s %s", prefix, msg))
-	else
-		-- [AI OBSERVABILITY] Verbose log hanya muncul saat dev
-		print(string.format("⚡ %s %s", prefix, msg))
-	end
-end
-
--- [1] ROOT REFERENCES
-local ROOTS = {
-	OVHL = ReplicatedStorage:WaitForChild("OVHL"),
-	Packages = ReplicatedStorage:WaitForChild("Packages"),
-}
-
--- [2] PACKAGE CACHE (Optimization)
--- Menyimpan referensi package yang sudah ditemukan agar tidak looping folder lagi
-local _packageCache: { [string]: Instance } = {}
-
-local function findPkg(pkgName: string): Instance?
-	-- 1. Cek Cache (O(1))
-	if _packageCache[pkgName] then
-		return _packageCache[pkgName]
-	end
-
-	-- 2. Cek Exact Match
+local ROOTS = { OVHL = ReplicatedStorage:WaitForChild("OVHL"), Packages = ReplicatedStorage:WaitForChild("Packages") }
+local _packageCache = {}
+local function findPkg(pkgName)
+	if _packageCache[pkgName] then return _packageCache[pkgName] end
 	local exact = ROOTS.Packages:FindFirstChild(pkgName)
-	if exact then
-		_packageCache[pkgName] = exact
-		return exact
-	end
-
-	-- 3. Scan Wally Format (O(n) - Only runs once per package per session)
-	local lowerName = pkgName:lower()
+	if exact then _packageCache[pkgName] = exact; return exact end
+    local lower = pkgName:lower()
 	for _, child in ipairs(ROOTS.Packages:GetChildren()) do
-		local cName = child.Name:lower()
-		-- Logika standar Wally: author_repo@version atau index folder
-		if
-			cName:find("_" .. lowerName .. "@", 1, true)
-			or cName:find("^" .. lowerName .. "@")
-			or cName:find(lowerName, 1, true)
-		then
-			_packageCache[pkgName] = child -- Simpan ke cache!
-			log("Package Cached: " .. pkgName .. " -> " .. child.Name)
-			return child
-		end
+		if child.Name:lower():find(lower, 1, true) then _packageCache[pkgName] = child; return child end
 	end
-
 	return nil
 end
-
--- [3] ALIAS REGISTRY (Preserved from v0.1.0)
 local ALIAS_MAP = {
-	-- CORE
-	["Framework"] = ROOTS.OVHL.Core.Framework,
-	["Context"] = ROOTS.OVHL.Core.Context,
-	["Logger"] = ROOTS.OVHL.Core.SmartLogger,
-
-	-- [NETWORKING PREP] Nanti file ini akan direwrite di Fase 2, tapi reference tetap aman
-	["Bridge"] = ROOTS.OVHL.Core.Networking.Bridge,
-	["Enums"] = ROOTS.OVHL.Core.Networking.NetworkEnums,
-	["Middleware"] = ROOTS.OVHL.Core.Networking.Middleware,
-
-	["Signals"] = ROOTS.OVHL.Core.Signals,
-	["Constants"] = ROOTS.OVHL.Core.Constants,
-	["Manifest"] = ROOTS.OVHL.Core.Manifest,
-	["Env"] = ROOTS.OVHL.Core.Env,
-	["Schema"] = ROOTS.OVHL.Core.ConfigSchema,
-	["ConfigLoader"] = ROOTS.OVHL.Core.SharedConfigLoader,
-	["TypeValidator"] = ROOTS.OVHL.Core.TypeValidator,
-
-	-- UI FOUNDATION
-	["API"] = ROOTS.OVHL.UI.Foundation.API,
-	["Theme"] = ROOTS.OVHL.UI.Foundation.OVHLTheme,
-	["Assets"] = ROOTS.OVHL.UI.Foundation.Assets,
-	["ActionGuard"] = ROOTS.OVHL.UI.Foundation.ActionGuard,
-	["SafeLoader"] = ROOTS.OVHL.UI.Foundation.SafeLoader,
-	["Util"] = ROOTS.OVHL.UI.Foundation.Util,
-	["Motion"] = ROOTS.OVHL.UI.Foundation.Motion,
-	["MotionPresets"] = ROOTS.OVHL.UI.Foundation.MotionPresets,
-	["Topbar"] = ROOTS.OVHL.UI.Foundation.Bridges.Topbar,
-	["Layout"] = ROOTS.OVHL.UI.Foundation.Layout,
-
-	-- PACKAGES (Lazy Loaded via Cache if not explicit)
-	["Onyx"] = findPkg("onyx-ui"),
-	["TestEZ"] = findPkg("TestEZ"),
-	["Fusion"] = findPkg("Fusion"),
-	["Trove"] = findPkg("Trove"),
-	["Promise"] = findPkg("Promise"),
-	["Signal"] = findPkg("Signal"),
-	["ProfileService"] = findPkg("ProfileService"),
+	["Framework"] = ROOTS.OVHL.Core.Framework, ["Context"] = ROOTS.OVHL.Core.Context,
+	["Logger"] = ROOTS.OVHL.Core.SmartLogger, ["Signals"] = ROOTS.OVHL.Core.Signals,
+    ["Manifest"] = ROOTS.OVHL.Core.Manifest, ["Env"] = ROOTS.OVHL.Core.Env,
+    ["ConfigLoader"] = ROOTS.OVHL.Core.SharedConfigLoader, ["Schema"] = ROOTS.OVHL.Core.ConfigSchema,
+    ["TypeValidator"] = ROOTS.OVHL.Core.TypeValidator, ["RateLimiter"] = ROOTS.OVHL.Core.RateLimiter,
+    ["Bridge"] = ROOTS.OVHL.Core.Networking.Bridge, ["Enums"] = ROOTS.OVHL.Core.Networking.NetworkEnums,
+    ["UIManager"] = ROOTS.OVHL.Core.UI.UIManager, ["Observable"] = ROOTS.OVHL.Core.UI.Observable,
+    ["Telemetry"] = ROOTS.OVHL.Core.UI.Telemetry, ["LayoutUtil"] = ROOTS.OVHL.Core.UI.LayoutUtil,
+    ["SmartFinder"] = ROOTS.OVHL.Core.UI.SmartFinder, ["MotionUtil"] = ROOTS.OVHL.Core.UI.MotionUtil,
+    ["DeviceUtil"] = ROOTS.OVHL.Core.UI.DeviceUtil, -- [ADDED HERE]
+    ["Style"] = ROOTS.OVHL.UI.React.Foundation.Style, ["Assets"] = ROOTS.OVHL.UI.React.Foundation.Assets,
+    ["Atoms"] = ROOTS.OVHL.UI.React.Foundation.Package, ["Molecules"] = ROOTS.OVHL.UI.React.Components.Package,
+    ["React"] = findPkg("React"), ["ReactRoblox"] = findPkg("ReactRoblox"), ["Reflex"] = findPkg("Reflex"),
+    ["Promise"] = findPkg("Promise"), ["Signal"] = findPkg("Signal"), ["Trove"] = findPkg("Trove"),
+    ["TestEZ"] = findPkg("TestEZ"), ["ProfileService"] = findPkg("ProfileService"), ["Topbar"] = findPkg("TopbarPlus"),
 }
-
--- [4] PUBLIC API
-function Loader.Get(aliasName: string)
-	-- A. Cek Alias Map
+if RunService:IsServer() then
+    local S_OVHL = ServerScriptService:WaitForChild("OVHL"); local S_CORE = S_OVHL:WaitForChild("Core")
+    ALIAS_MAP["ServerKernel"] = S_CORE.ServerKernel; ALIAS_MAP["NetworkGuard"] = S_CORE.NetworkGuard
+    ALIAS_MAP["SessionMutex"] = S_CORE.SessionMutex; ALIAS_MAP["DataMigrator"] = S_CORE.DataMigrator
+    if S_CORE:FindFirstChild("Permissions") then
+        ALIAS_MAP["InternalDB"] = S_CORE.Permissions.Adapters.InternalDB; ALIAS_MAP["HDAdmin"] = S_CORE.Permissions.Adapters.HDAdmin
+    end
+    if S_OVHL:FindFirstChild("Config") then ALIAS_MAP["PermissionConfig"] = S_OVHL.Config.PermissionConfig end
+end
+function Loader.Get(aliasName)
 	local target = ALIAS_MAP[aliasName]
-	if target then
-		return require(target)
-	end
-
-	-- B. Cek Cache / Packages (Fallback)
-	-- Hanya lakukan ini jika tidak ada di Alias Map.
+	if target then return require(target) end
 	local pkg = findPkg(aliasName)
-	if pkg then
-		return require(pkg)
-	end
-
-	-- C. Strict Error (No Fuzzy Search)
-	local msg = string.format("🛑 [OVHL-LOADER] Fatal: Module '%s' not found in Registry or Packages.", aliasName)
-	log(msg, "ERROR")
-	error(msg, 2)
+	if pkg then return require(pkg) end
+	error("🛑 [LOADER] Fatal: Module '" .. aliasName .. "' not found.", 2)
 end
-
--- [5] PROXY & LEGACY SUPPORT (Proxies preserved)
-local function createFolderProxy(folder: Instance)
-	return setmetatable({}, {
-		__index = function(_, key: string)
-			local target = folder:FindFirstChild(key)
-			if not target then
-				error("❌ '" .. key .. "' not found in " .. folder.Name)
-			end
-			if target:IsA("ModuleScript") then
-				return require(target)
-			end
-			return createFolderProxy(target)
-		end,
-		__call = function(_, pathStr: string)
-			local current = folder
-			for _, seg in ipairs(string.split(pathStr, "/")) do
-				current = current:FindFirstChild(seg)
-				if not current then
-					error("Path '" .. seg .. "' missing in " .. folder.Name)
-				end
-			end
-			return if current:IsA("ModuleScript") then require(current) else current
-		end,
-	})
-end
-
-Loader.UI = createFolderProxy(ROOTS.OVHL.UI)
-Loader.Config = createFolderProxy(ROOTS.OVHL.Config)
-
--- Helper Module Loader (Feature Modules)
-Loader.Module = function(featureName: string)
+Loader.Module = function(featureName)
 	local target = ROOTS.OVHL.Modules:FindFirstChild(featureName)
-	if not target then
-		error("Module Feature '" .. featureName .. "' not found in OVHL.Modules")
-	end
+    if not target and RunService:IsClient() then
+        local Player = game.Players.LocalPlayer; local ClientModules = Player:WaitForChild("PlayerScripts"):WaitForChild("OVHL"):WaitForChild("Modules")
+        target = ClientModules:FindFirstChild(featureName)
+    end
+	if not target then error("Module Feature '" .. featureName .. "' not found") end
 	return target
 end
-
--- Compatibility Helper (Backward Compat)
-Loader.Pkg = setmetatable({}, {
-	__call = function(_, name)
-		if name == "onyx-ui" then
-			return Loader.Get("Onyx")
-		end
-		return Loader.Get(name)
-	end,
-})
-
--- Server Side Pathing (Only exposed on Server)
-if RunService:IsServer() then
-	local ServerRoot = ServerScriptService:WaitForChild("OVHL")
-	Loader.Server = function(pathStr: string)
-		local current = ServerRoot
-		for _, seg in ipairs(string.split(pathStr, "/")) do
-			current = current:FindFirstChild(seg)
-			if not current then
-				error("Server Path '" .. pathStr .. "' not found")
-			end
-		end
-		return require(current)
-	end
+Loader.UI = { React = ROOTS.OVHL.UI.React, Native = ROOTS.OVHL.UI.Native, Core = ROOTS.OVHL.Core.UI }
+Loader.Config = function(configName)
+    local cfgFolder = ROOTS.OVHL.Config; local target = cfgFolder:FindFirstChild(configName)
+    if target then return require(target) end
+    error("Config '"..configName.."' not found in OVHL.Config")
 end
-
 return Loader

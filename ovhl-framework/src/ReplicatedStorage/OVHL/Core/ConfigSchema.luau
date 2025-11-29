@@ -1,6 +1,10 @@
 --!strict
--- @Core: ConfigSchema
--- Validasi struktur config agar tidak crash di runtime
+-- @Core: ConfigSchema (Sanitized)
+-- @Role: Structure Validation
+local RS = game:GetService("ReplicatedStorage")
+local Loader = require(RS.OVHL.Core.Loader)
+local SmartLogger = Loader.Get("Logger")
+
 local ConfigSchema = {}
 
 local REQUIRED = {
@@ -31,9 +35,16 @@ local function validate(data, schema, path)
 end
 
 function ConfigSchema.Validate(cfg, name)
+    local Log = SmartLogger.New("SCHEMA")
     local errs = validate(cfg, REQUIRED, name)
+    
     if #errs > 0 then
-        warn("[CONFIG ERROR] " .. name .. ":\n" .. table.concat(errs, "\n"))
+        -- [FIX] Structured Error Log
+        Log:Warn("ValidationFail", {
+            Target = name,
+            Count = #errs,
+            Details = table.concat(errs, "; ")
+        })
         return false
     end
     return true

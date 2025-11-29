@@ -1,6 +1,14 @@
 --!strict
+-- @Config: LoggerConfig
+-- @Role: Central Logging Rules
+local RunService = game:GetService("RunService")
+
+-- [SMART CONFIG]
+local MANUAL_OVERRIDE: string? = nil 
+local AUTO_LEVEL = RunService:IsStudio() and "DEBUG" or "INFO"
+
 return {
-    DefaultLevel = "DEBUG", -- [FIX] Ganti dari INFO ke DEBUG agar semua narasi muncul
+    DefaultLevel = MANUAL_OVERRIDE or AUTO_LEVEL,
     UseEmoji = true,
     UseColor = true,
     ShowTimestamp = true,
@@ -14,12 +22,9 @@ return {
         SHOP        = "🏪 SHOP", 
         ADMIN       = "👑 ADMIN",
         PERMISSION  = "🔐 PERMISSION",
-        
-        -- UI Domains (Telemetry)
+        TEST        = "🧪 TEST",
         UX             = "👆 UX",
         USER_INTERFACE = "🎨 UI",
-        TOPBAR         = "🔘 TOPBAR",
-        
         DEFAULT     = "📦 GENERAL"
     },
 

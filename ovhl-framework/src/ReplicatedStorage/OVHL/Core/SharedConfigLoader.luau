@@ -1,36 +1,33 @@
 --!strict
--- @Core: SharedConfigLoader
--- Mencari dan memuat SharedConfig dari folder Modules
+-- @Core: SharedConfigLoader (Sanitized)
+-- @Role: Load & Validate Module Configs
 local RS = game:GetService("ReplicatedStorage")
 local Loader = require(game.ReplicatedStorage.OVHL.Core.Loader)
 local Schema = Loader.Get("Schema")
+local SmartLogger = Loader.Get("Logger")
 
 local ConfigLoader = {}
 
 function ConfigLoader.Load(moduleName)
-    -- Cari folder module
+    local Log = SmartLogger.New("CONFIG")
     local root = RS.OVHL.Modules
     local moduleFolder = root:FindFirstChild(moduleName)
     
     if not moduleFolder then
-        warn("[Config] Module not found: " .. moduleName)
+        Log:Warn("ModuleMissing", { Module = moduleName })
         return {}
     end
     
-    -- Cari file config
     local configFile = moduleFolder:FindFirstChild("SharedConfig")
-    if not configFile then
-        return {} -- Config is optional, return empty
-    end
+    if not configFile then return {} end
     
-    -- Require & Validate
     local success, data = pcall(require, configFile)
     if not success then
-        warn("[Config] Syntax Error in " .. moduleName .. ": " .. tostring(data))
+        Log:Error("SyntaxError", { Module = moduleName, Err = tostring(data) })
         return {}
     end
     
-    -- Validasi Schema
+    -- Validasi Schema (Passing Logger biar Schema bisa log error)
     Schema.Validate(data, moduleName)
     
     return data
