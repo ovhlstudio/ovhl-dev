@@ -1,2 +1,0 @@
---!strict
--- Deprecated. Use OVHLTheme.luau

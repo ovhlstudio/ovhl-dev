@@ -1,0 +1,1 @@
+return { Home = require(script.Parent.HomeView), Dashboard = require(script.Parent.DashboardView), Grid = require(script.Parent.GridView), Form = require(script.Parent.FormView), Split = require(script.Parent.SplitView), Feedback = require(script.Parent.FeedbackView), Physics = require(script.Parent.PhysicsView) }

@@ -1,52 +1,42 @@
 --!strict
 -- @System: TestRunner (Client Side)
+-- @Standard: Observability Compliant (Zero Print)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
-if not RunService:IsStudio() then
-	return
-end
+if not RunService:IsStudio() then return end
 
 task.defer(function()
-	task.wait(3) -- Client biasanya butuh waktu lebih lama buat loading UI
+	task.wait(3) -- Client load buffer
 
-	print("\n🧪 [CLIENT] STARTING TEST RUNNER...")
+    -- [FIX] Logger Integration
+    local Loader = require(ReplicatedStorage.OVHL.Core.Loader)
+    local Logger = Loader.Get("Logger").New("TEST")
 
-	-- 1. Load TesEZ
-	local Loader = require(ReplicatedStorage.OVHL.Core.Loader)
+	Logger:Info("Init", "🧪 CLIENT TEST RUNNER STARTING...")
+
 	local TesEZ
+	pcall(function() TesEZ = Loader.Get("TestEZ") end)
 
-	pcall(function()
-		TesEZ = Loader.Get("TestEZ")
-	end)
+	if not TesEZ then 
+        Logger:Warn("Skip", "TestEZ not found.")
+        return 
+    end
 
-	if not TesEZ then
-		return
-	end -- Silent fail kalau gak ada (biasanya udah teriak di server)
-
-	-- 2. Cari Folder Test di PlayerScripts
 	local PlayerScripts = Players.LocalPlayer:WaitForChild("PlayerScripts")
 	local ClientTests = PlayerScripts:WaitForChild("Tests", 10)
 
-	local testRoots = {}
-	if ClientTests then
-		table.insert(testRoots, ClientTests)
-	end
+	if not ClientTests then 
+        Logger:Info("Skip", "No Client Tests found.")
+        return 
+    end
 
-	-- Optional: Kalau mau ngetes Shared Logic (ReplicatedStorage) di client juga
-	-- table.insert(testRoots, ReplicatedStorage:WaitForChild("Tests"))
-
-	if #testRoots == 0 then
-		return -- Gak ada test client, skip aja
-	end
-
-	-- 3. JALANIN TES!
-	local results = TesEZ.TestBootstrap:run(testRoots)
+	local results = TesEZ.TestBootstrap:run({ClientTests})
 
 	if results.failureCount > 0 then
-		warn("❌ [CLIENT] FAILED: " .. results.failureCount .. " tests broken.")
+		Logger:Error("FAIL", results.failureCount .. " client tests failed.")
 	else
-		print("✅ [CLIENT] SUCCESS: UI & Controllers secure.")
+		Logger:Info("PASS", "✅ Client Systems Secure.")
 	end
 end)
